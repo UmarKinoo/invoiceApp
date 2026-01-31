@@ -1,0 +1,5 @@
+{
+  "name": "Lumina CRM & Invoicing",
+  "description": "A sophisticated, Gemini-powered CRM and invoicing system inspired by Jetpack CRM. Manage clients, track payments, and generate invoices using AI.",
+  "requestFramePermissions": []
+}
