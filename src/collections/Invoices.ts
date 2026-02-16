@@ -95,6 +95,7 @@ export const Invoices: CollectionConfig = {
     { name: 'taxRate', type: 'number', defaultValue: 0, admin: { description: 'Percent' } },
     { name: 'discount', type: 'number', defaultValue: 0 },
     { name: 'shipping', type: 'number', defaultValue: 0 },
+    { name: 'carNumber', type: 'text', admin: { description: 'Vehicle / car reference' } },
     { name: 'notes', type: 'textarea' },
     { name: 'subtotal', type: 'number', required: true, defaultValue: 0 },
     { name: 'tax', type: 'number', required: true, defaultValue: 0 },

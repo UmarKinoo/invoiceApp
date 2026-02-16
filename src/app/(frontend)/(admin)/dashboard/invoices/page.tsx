@@ -44,6 +44,7 @@ export default async function InvoicesPage({
       taxRate: inv.taxRate ?? null,
       discount: inv.discount ?? null,
       shipping: inv.shipping ?? null,
+      carNumber: inv.carNumber ?? null,
       notes: inv.notes ?? null,
       total: Number(inv.total) ?? 0,
       client: clientNorm,

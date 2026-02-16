@@ -79,6 +79,7 @@ type InvoiceDetailClientProps = {
     total: number
     subtotal?: number
     tax?: number
+    carNumber?: string | null
     notes?: string | null
     items?: { description?: string; quantity?: number; rate?: number }[]
   }
@@ -318,6 +319,17 @@ export function InvoiceDetailClient({ invoice, client, printMode = false }: Invo
               <span className="text-xl">${Number(invoice.total).toFixed(2)}</span>
             </div>
           </div>
+          {invoice.carNumber && (
+            <>
+              <Separator />
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Car number
+                </Label>
+                <p className="text-sm text-muted-foreground">{invoice.carNumber}</p>
+              </div>
+            </>
+          )}
           {invoice.notes && (
             <>
               <Separator />

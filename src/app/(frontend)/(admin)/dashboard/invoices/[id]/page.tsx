@@ -49,6 +49,7 @@ export default async function InvoiceDetailPage({
     total: Number(inv.total),
     subtotal,
     tax: Number(inv.tax),
+    carNumber: inv.carNumber ?? null,
     notes: inv.notes ?? null,
     items,
   }

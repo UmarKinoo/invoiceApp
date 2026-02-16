@@ -7,9 +7,11 @@ import {
   ChevronLeft,
   ChevronDown,
   Download,
+  Filter,
   Loader2,
   Plus,
   Receipt,
+  Search,
   Share2,
   Sparkles,
   X,
@@ -40,6 +42,7 @@ type InvoiceDoc = {
   taxRate?: number | null
   discount?: number | null
   shipping?: number | null
+  carNumber?: string | null
   notes?: string | null
   total: number
   client?: { id: string; name?: string | null; company?: string | null } | string | number
@@ -124,6 +127,12 @@ export function InvoicesPageClient({
   const [deleteLoading, setDeleteLoading] = useState(false)
   const didOpenNewRef = useRef(false)
 
+  // Filters
+  const [filterStatus, setFilterStatus] = useState<string>('')
+  const [filterClientId, setFilterClientId] = useState<string>('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'total-desc' | 'total-asc'>('newest')
+
   useEffect(() => {
     setInvoices(initialInvoices)
   }, [initialInvoices])
@@ -190,6 +199,7 @@ export function InvoicesPageClient({
       taxRate: settings.taxRateDefault,
       discount: 0,
       shipping: 0,
+      carNumber: '',
       notes: '',
     })
     setItems([])
@@ -242,6 +252,7 @@ export function InvoicesPageClient({
       taxRate: activeInvoice.taxRate ?? 0,
       discount: activeInvoice.discount ?? 0,
       shipping: activeInvoice.shipping ?? 0,
+      carNumber: activeInvoice.carNumber ?? '',
       notes: activeInvoice.notes ?? '',
       subtotal,
       tax,
@@ -334,6 +345,49 @@ export function InvoicesPageClient({
     const id = typeof c === 'object' ? (c as { id?: string })?.id : c
     return clients.find((x) => String(x.id) === String(id)) ?? null
   }
+
+  const filteredInvoices = useMemo(() => {
+    let list = invoices
+    if (filterStatus) {
+      list = list.filter((inv) => (inv.status ?? 'draft') === filterStatus)
+    }
+    if (filterClientId) {
+      list = list.filter((inv) => {
+        const c = inv.client
+        const id = typeof c === 'object' && c !== null && 'id' in c ? String((c as { id: string }).id) : String(c)
+        return id === filterClientId
+      })
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase()
+      list = list.filter((inv) => {
+        const client = getClientForInvoice(inv)
+        const invNum = (inv.invoiceNumber ?? '').toLowerCase()
+        const clientName = (client?.name ?? '').toLowerCase()
+        const company = (client?.company ?? '').toLowerCase()
+        return invNum.includes(q) || clientName.includes(q) || company.includes(q)
+      })
+    }
+    const sorted = [...list]
+    if (sortBy === 'newest') {
+      sorted.sort((a, b) => {
+        const da = typeof a.date === 'string' ? new Date(a.date).getTime() : 0
+        const db = typeof b.date === 'string' ? new Date(b.date).getTime() : 0
+        return db - da
+      })
+    } else if (sortBy === 'oldest') {
+      sorted.sort((a, b) => {
+        const da = typeof a.date === 'string' ? new Date(a.date).getTime() : 0
+        const db = typeof b.date === 'string' ? new Date(b.date).getTime() : 0
+        return da - db
+      })
+    } else if (sortBy === 'total-desc') {
+      sorted.sort((a, b) => Number(b.total) - Number(a.total))
+    } else if (sortBy === 'total-asc') {
+      sorted.sort((a, b) => Number(a.total) - Number(b.total))
+    }
+    return sorted
+  }, [invoices, clients, filterStatus, filterClientId, searchQuery, sortBy])
 
   const previewClient = activeInvoice.clientId
     ? clients.find((c) => String(c.id) === String(activeInvoice.clientId))
@@ -453,9 +507,78 @@ export function InvoicesPageClient({
             </div>
           </header>
 
+          {/* Filters */}
+          <div className="px-2 lg:px-0 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                <Filter className="size-3.5" />
+                <span>Filter</span>
+              </div>
+              <input
+                type="text"
+                placeholder="Search by invoice # or client..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-9 w-full min-w-[140px] max-w-[220px] rounded-lg border border-input bg-background px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="h-9 rounded-lg border border-input bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">All statuses</option>
+                {(['draft', 'sent', 'paid', 'overdue', 'cancelled'] as const).map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_LABELS[s]}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={filterClientId}
+                onChange={(e) => setFilterClientId(e.target.value)}
+                className="h-9 min-w-[160px] max-w-[240px] rounded-lg border border-input bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">All clients</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name ?? c.company ?? '—'}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                className="h-9 rounded-lg border border-input bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="total-desc">Total: high → low</option>
+                <option value="total-asc">Total: low → high</option>
+              </select>
+              {(filterStatus || filterClientId || searchQuery.trim()) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterStatus('')
+                    setFilterClientId('')
+                    setSearchQuery('')
+                  }}
+                  className="h-9 px-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+            {(filterStatus || filterClientId || searchQuery.trim()) && (
+              <p className="text-[10px] text-muted-foreground">
+                Showing {filteredInvoices.length} of {invoices.length} invoices
+              </p>
+            )}
+          </div>
+
           <div className="space-y-3 px-2 lg:px-0">
-            {invoices.length > 0 ? (
-              invoices.map((inv) => {
+            {filteredInvoices.length > 0 ? (
+              filteredInvoices.map((inv) => {
                 const client = getClientForInvoice(inv)
                 const status = (inv.status ?? 'draft') as string
                 return (
@@ -514,6 +637,26 @@ export function InvoicesPageClient({
                   </div>
                 )
               })
+            ) : invoices.length > 0 ? (
+              <div className="py-24 text-center flex flex-col items-center justify-center space-y-4">
+                <div className="flex size-20 items-center justify-center rounded-2xl border border-border bg-muted text-muted-foreground">
+                  <Search className="size-10" />
+                </div>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  No invoices match your filters.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterStatus('')
+                    setFilterClientId('')
+                    setSearchQuery('')
+                  }}
+                  className="text-xs font-medium uppercase tracking-wider text-primary hover:underline"
+                >
+                  Clear filters
+                </button>
+              </div>
             ) : (
               <div className="py-24 text-center flex flex-col items-center justify-center space-y-4">
                 <div className="flex size-20 items-center justify-center rounded-2xl border border-border bg-muted text-muted-foreground">
@@ -769,6 +912,49 @@ export function InvoicesPageClient({
                       No line items specified.
                     </div>
                   )}
+                </div>
+              </section>
+
+              <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-1">
+                  <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-xs text-foreground focus:ring-2 focus:ring-ring"
+                    value={activeInvoice.date ?? ''}
+                    onChange={(e) =>
+                      setActiveInvoice((prev) => ({ ...prev, date: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Due date
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-xs text-foreground focus:ring-2 focus:ring-ring"
+                    value={activeInvoice.dueDate ?? ''}
+                    onChange={(e) =>
+                      setActiveInvoice((prev) => ({ ...prev, dueDate: e.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Car number
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Vehicle / car reference"
+                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-xs text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
+                    value={activeInvoice.carNumber ?? ''}
+                    onChange={(e) =>
+                      setActiveInvoice((prev) => ({ ...prev, carNumber: e.target.value }))
+                    }
+                  />
                 </div>
               </section>
 

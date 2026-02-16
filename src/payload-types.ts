@@ -237,6 +237,10 @@ export interface Invoice {
   taxRate?: number | null;
   discount?: number | null;
   shipping?: number | null;
+  /**
+   * Vehicle / car reference
+   */
+  carNumber?: string | null;
   notes?: string | null;
   subtotal: number;
   tax: number;
@@ -539,6 +543,7 @@ export interface InvoicesSelect<T extends boolean = true> {
   taxRate?: T;
   discount?: T;
   shipping?: T;
+  carNumber?: T;
   notes?: T;
   subtotal?: T;
   tax?: T;
