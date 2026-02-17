@@ -63,10 +63,12 @@ export const LoginForm = () => {
   }
 
   return (
-    <form className="my-6" onSubmit={handleSubmit}>
-      <FieldGroup>
+    <form className="my-5 sm:my-6 space-y-5 sm:space-y-6" onSubmit={handleSubmit}>
+      <FieldGroup className="gap-5 sm:gap-6">
         <Field>
-          <FieldLabel htmlFor="email">Email</FieldLabel>
+          <FieldLabel htmlFor="email" className="text-sm font-medium">
+            Email
+          </FieldLabel>
           <Input
             id="email"
             type="email"
@@ -74,11 +76,14 @@ export const LoginForm = () => {
             placeholder="email@example.com"
             autoComplete="email"
             required
+            className="min-h-[44px] text-base sm:text-sm px-4 py-3"
           />
         </Field>
 
         <Field>
-          <FieldLabel htmlFor="password">Password</FieldLabel>
+          <FieldLabel htmlFor="password" className="text-sm font-medium">
+            Password
+          </FieldLabel>
           <Input
             id="password"
             type="password"
@@ -86,21 +91,28 @@ export const LoginForm = () => {
             placeholder="Enter your password"
             autoComplete="current-password"
             required
+            className="min-h-[44px] text-base sm:text-sm px-4 py-3"
           />
           <FieldDescription>
-            <Link href="/forgot-password" className="hover:underline">
+            <Link
+              href="/forgot-password"
+              className="inline-block min-h-[44px] leading-[44px] py-0 hover:underline active:opacity-70"
+            >
               Forgot password?
             </Link>
           </FieldDescription>
         </Field>
 
-        <Field orientation="horizontal">
+        <Field orientation="horizontal" className="min-h-[44px] items-center gap-3">
           <Checkbox
             id="remember-me"
             checked={rememberMe}
             onCheckedChange={(checked) => setRememberMe(checked === true)}
+            className="size-5 sm:size-4 shrink-0 touch-manipulation"
           />
-          <FieldLabel htmlFor="remember-me">Remember me for 30 days</FieldLabel>
+          <FieldLabel htmlFor="remember-me" className="text-sm cursor-pointer touch-manipulation">
+            Remember me for 30 days
+          </FieldLabel>
         </Field>
 
         <SubmitButton loading={isPending} text="Login" />

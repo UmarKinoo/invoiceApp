@@ -26,10 +26,10 @@ export default async function LoginPage({
 
   return (
     <BeamsPageLayout>
-      <Section>
-        <Container>
+      <Section className="py-4 sm:py-6">
+        <Container className="max-w-[min(100%,22rem)] mx-auto px-4 sm:px-6">
           <AuthBox>
-            <h1>Login</h1>
+            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">Login</h1>
             {(params.success || params.error) && (
               <LoginPageToast success={params.success} error={params.error} />
             )}
