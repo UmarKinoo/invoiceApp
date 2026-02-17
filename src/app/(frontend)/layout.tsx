@@ -1,5 +1,6 @@
 import '@/globals.css'
 
+import { GeistMono } from 'geist/font/mono'
 import { ThemeProvider } from '@/components/theme/theme-provider'
 import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from 'sonner'
@@ -40,7 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`dark ${fontSansClassName} antialiased`}
+      className={cn('dark', fontSansClassName, GeistMono.variable, 'antialiased')}
       suppressHydrationWarning
     >
       <head>

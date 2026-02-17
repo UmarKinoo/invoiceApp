@@ -10,7 +10,7 @@ export const Header = async () => {
 
   return (
     <Nav
-      className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md"
+      className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-md"
       containerClassName="flex items-center justify-between gap-4"
     >
       <Link href="/" className="text-foreground">

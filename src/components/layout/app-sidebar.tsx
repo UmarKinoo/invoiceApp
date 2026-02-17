@@ -13,6 +13,7 @@ import {
   Wallet,
   Sparkles,
   Settings,
+  LogOut,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { User } from '@/payload-types'
@@ -33,6 +34,25 @@ import {
   SidebarMenuSubItem,
 } from '@/components/ui/sidebar'
 import { cn } from '@/lib/utils'
+import { clearAuthCookies } from '@/lib/auth'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 const SIDEBAR_NAV: { href: string; icon: LucideIcon; label: string }[] = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -60,7 +80,7 @@ const INVOICES_SUBMENU = [
 function avatarUrl(user: User | null): string {
   if (!user?.email) return ''
   const name = user.email.split('@')[0] ?? 'User'
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=3b82f6&color=fff`
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=ffffff&color=000000`
 }
 
 function displayName(user: User | null): string {
@@ -68,9 +88,61 @@ function displayName(user: User | null): string {
   return user.email
 }
 
+function AccountMenuContent({
+  user,
+  isLoggingOut,
+  onLogout,
+  onSettings,
+  onClose,
+}: {
+  user: User | null
+  isLoggingOut: boolean
+  onLogout: () => Promise<void>
+  onSettings: () => void
+  onClose?: () => void
+}) {
+  return (
+    <>
+      <div className="px-2 py-2">
+        <p className="text-sm font-medium text-foreground">{displayName(user)}</p>
+        <p className="text-xs text-muted-foreground truncate">{user?.email ?? ''}</p>
+      </div>
+      <div className="border-t px-1 py-1">
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 rounded-sm px-2 py-2.5 text-sm text-destructive outline-none hover:bg-destructive/10"
+          onClick={async () => {
+            await onLogout()
+            onClose?.()
+          }}
+          disabled={isLoggingOut}
+        >
+          <LogOut className="size-4 shrink-0" />
+          {isLoggingOut ? 'Signing out...' : 'Log out'}
+        </button>
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-accent"
+          onClick={() => {
+            onSettings()
+            onClose?.()
+          }}
+        >
+          <Settings className="size-4 shrink-0" />
+          Settings
+        </button>
+      </div>
+    </>
+  )
+}
+
 export function AppSidebar({ user }: { user: User | null }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const router = useRouter()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const isMobile = useIsMobile()
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard'
@@ -91,7 +163,7 @@ export function AppSidebar({ user }: { user: User | null }) {
   return (
     <Sidebar className="border-sidebar-border border-r">
       <SidebarHeader className="p-4">
-        <Link href="/dashboard" className="text-sidebar-foreground">
+        <Link href="/" className="text-sidebar-foreground">
           <span className="text-lg font-semibold tracking-tight">Swiftbook</span>
         </Link>
       </SidebarHeader>
@@ -151,21 +223,117 @@ export function AppSidebar({ user }: { user: User | null }) {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter className="border-sidebar-border border-t p-2">
-        <div className="flex items-center gap-3 rounded-lg border border-sidebar-border bg-sidebar-accent/50 px-3 py-2">
-          <Avatar className="size-8 rounded-full">
-            <AvatarImage src={avatarUrl(user)} alt="" />
-            <AvatarFallback className="bg-primary/20 text-primary text-xs">
-              {displayName(user).slice(0, 2).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-sidebar-foreground">
-              {displayName(user)}
-            </p>
-            <p className="text-xs text-muted-foreground">Account</p>
-          </div>
-        </div>
+      <SidebarFooter className="border-sidebar-border border-t mt-auto pt-4 p-2">
+        {isMobile ? (
+          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+            <SheetTrigger asChild>
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 rounded-lg border border-sidebar-border bg-sidebar-accent/50 px-3 py-2 text-left outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent focus-visible:ring-2 min-h-[44px] touch-manipulation"
+                aria-label="Account menu"
+              >
+                <Avatar className="size-9 shrink-0 overflow-hidden rounded-full border border-border bg-white">
+                  <AvatarImage src={avatarUrl(user)} alt="" className="object-cover" />
+                  <AvatarFallback className="bg-white text-black text-xs font-medium">
+                    {displayName(user).slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-sidebar-foreground">
+                    {displayName(user)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Account</p>
+                </div>
+              </button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="rounded-t-xl pb-[env(safe-area-inset-bottom)] pt-6">
+              <SheetHeader className="sr-only">
+                <SheetTitle>Account</SheetTitle>
+              </SheetHeader>
+              <div className="px-2 pb-2">
+              <AccountMenuContent
+                user={user}
+                isLoggingOut={isLoggingOut}
+                onLogout={async () => {
+                  if (isLoggingOut) return
+                  setIsLoggingOut(true)
+                  try {
+                    const result = await clearAuthCookies()
+                    if (result.success) {
+                      router.push('/')
+                      router.refresh()
+                    }
+                  } finally {
+                    setIsLoggingOut(false)
+                  }
+                }}
+                onSettings={() => router.push('/dashboard/settings')}
+                onClose={() => setSheetOpen(false)}
+              />
+              </div>
+            </SheetContent>
+          </Sheet>
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 rounded-lg border border-sidebar-border bg-sidebar-accent/50 px-3 py-2 text-left outline-none ring-sidebar-ring transition-colors hover:bg-sidebar-accent focus-visible:ring-2 min-h-[44px]"
+                aria-label="Account menu"
+              >
+                <Avatar className="size-9 shrink-0 overflow-hidden rounded-full border border-border bg-white">
+                  <AvatarImage src={avatarUrl(user)} alt="" className="object-cover" />
+                  <AvatarFallback className="bg-white text-black text-xs font-medium">
+                    {displayName(user).slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-sidebar-foreground">
+                    {displayName(user)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Account</p>
+                </div>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              side="top"
+              sideOffset={8}
+              className="z-[100] w-[--radix-dropdown-menu-trigger-width] min-w-56"
+            >
+              <DropdownMenuLabel className="font-normal">
+                <p className="text-sm font-medium text-foreground">{displayName(user)}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email ?? ''}</p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={async () => {
+                  if (isLoggingOut) return
+                  setIsLoggingOut(true)
+                  try {
+                    const result = await clearAuthCookies()
+                    if (result.success) {
+                      router.push('/')
+                      router.refresh()
+                    }
+                  } finally {
+                    setIsLoggingOut(false)
+                  }
+                }}
+                disabled={isLoggingOut}
+              >
+                <LogOut className="size-4" />
+                {isLoggingOut ? 'Signing out...' : 'Log out'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => router.push('/dashboard/settings')}>
+                <Settings className="size-4" />
+                Settings
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </SidebarFooter>
     </Sidebar>
   )

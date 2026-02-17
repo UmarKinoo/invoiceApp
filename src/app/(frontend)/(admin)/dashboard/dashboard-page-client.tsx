@@ -1,16 +1,34 @@
 'use client'
 
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Wallet, Clock, Users, TrendingUp, FilePlus, UserPlus, User as UserIcon } from 'lucide-react'
+import { Wallet, Clock, Users, TrendingUp, FilePlus, UserPlus, LogOut, Settings } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { User } from '@/payload-types'
 import { formatCurrency } from '@/lib/utils'
+import { clearAuthCookies } from '@/lib/auth'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { DashboardChart } from '@/app/(frontend)/(admin)/dashboard/dashboard-chart'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 type InvoiceDoc = {
   id: string
@@ -27,7 +45,11 @@ const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Se
 function avatarUrl(user: User | null): string {
   if (!user?.email) return ''
   const name = user.email.split('@')[0] ?? 'User'
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=3b82f6&color=fff`
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=ffffff&color=000000`
+}
+
+function displayName(user: User | null): string {
+  return user?.email ?? 'User'
 }
 
 const StatCard: React.FC<{
@@ -49,7 +71,7 @@ const StatCard: React.FC<{
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {label}
         </p>
-        <p className="min-h-[2rem] text-2xl font-semibold tabular-nums tracking-tight text-foreground lg:text-3xl">
+        <p className="min-h-[2rem] font-mono text-xl font-semibold tabular-nums tracking-tight text-foreground sm:text-2xl lg:text-[27px]">
           {value}
         </p>
       </div>
@@ -67,6 +89,9 @@ export function DashboardPageClient({
   clients: ClientDoc[]
 }) {
   const router = useRouter()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const isMobile = useIsMobile()
 
   const stats = useMemo(() => {
     const paid = invoices
@@ -105,27 +130,118 @@ export function DashboardPageClient({
   const formatDate = (d: string | null) => (d ? d.slice(0, 10) || d : '')
   const profileAvatarUrl = avatarUrl(user)
 
+  const avatarTrigger = (
+    <button
+      type="button"
+      className="shrink-0 rounded-full outline-none ring-sidebar-ring focus-visible:ring-2"
+      aria-label="Account menu"
+    >
+      <Avatar className="size-10 shrink-0 overflow-hidden rounded-full border-2 border-border">
+        <AvatarImage src={profileAvatarUrl} alt="Profile" className="object-cover" />
+        <AvatarFallback className="bg-white text-black text-xs font-medium">
+          {(user?.email?.slice(0, 2) ?? 'U').toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+    </button>
+  )
+
+  const accountMenuContent = (
+    <>
+      <div className="px-2 py-2">
+        <p className="text-sm font-medium text-foreground">{displayName(user)}</p>
+        <p className="text-xs text-muted-foreground truncate">{user?.email ?? ''}</p>
+      </div>
+      <div className="border-t px-1 py-1">
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 rounded-sm px-2 py-2.5 text-sm text-destructive outline-none hover:bg-destructive/10"
+          onClick={async () => {
+            if (isLoggingOut) return
+            setIsLoggingOut(true)
+            try {
+              const result = await clearAuthCookies()
+              if (result.success) {
+                router.push('/')
+                router.refresh()
+              }
+            } finally {
+              setIsLoggingOut(false)
+            }
+            setSheetOpen(false)
+          }}
+          disabled={isLoggingOut}
+        >
+          <LogOut className="size-4 shrink-0" />
+          {isLoggingOut ? 'Signing out...' : 'Log out'}
+        </button>
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 rounded-sm px-2 py-2.5 text-sm outline-none hover:bg-accent"
+          onClick={() => {
+            router.push('/dashboard/settings')
+            setSheetOpen(false)
+          }}
+        >
+          <Settings className="size-4 shrink-0" />
+          Settings
+        </button>
+      </div>
+    </>
+  )
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500 lg:space-y-10">
       <PageHeader
-        title="Hub"
-        description="Enterprise control"
+        title="Swiftbook"
+        description={isMobile ? 'Dashboard' : 'Insights'}
         actions={
-          <Button variant="ghost" size="icon" className="shrink-0 rounded-full" asChild>
-            <Link href="/dashboard/settings">
-              {profileAvatarUrl ? (
-                <img
-                  src={profileAvatarUrl}
-                  alt="Profile"
-                  className="size-10 rounded-full ring-2 ring-border"
-                />
-              ) : (
-                <span className="flex size-10 items-center justify-center rounded-full bg-muted ring-2 ring-border text-muted-foreground">
-                  <UserIcon className="size-5" />
-                </span>
-              )}
-            </Link>
-          </Button>
+          isMobile ? (
+            <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+              <SheetTrigger asChild>{avatarTrigger}</SheetTrigger>
+              <SheetContent side="bottom" className="rounded-t-xl pb-[env(safe-area-inset-bottom)] pt-6">
+                <SheetHeader className="sr-only">
+                  <SheetTitle>Account</SheetTitle>
+                </SheetHeader>
+                <div className="px-2 pb-2">{accountMenuContent}</div>
+              </SheetContent>
+            </Sheet>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>{avatarTrigger}</DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={8} className="z-[100] min-w-56">
+                <DropdownMenuLabel className="font-normal">
+                  <p className="text-sm font-medium text-foreground">{displayName(user)}</p>
+                  <p className="text-xs text-muted-foreground truncate">{user?.email ?? ''}</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={async () => {
+                    if (isLoggingOut) return
+                    setIsLoggingOut(true)
+                    try {
+                      const result = await clearAuthCookies()
+                      if (result.success) {
+                        router.push('/')
+                        router.refresh()
+                      }
+                    } finally {
+                      setIsLoggingOut(false)
+                    }
+                  }}
+                  disabled={isLoggingOut}
+                >
+                  <LogOut className="size-4" />
+                  {isLoggingOut ? 'Signing out...' : 'Log out'}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => router.push('/dashboard/settings')}>
+                  <Settings className="size-4" />
+                  Settings
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )
         }
       />
 
@@ -218,7 +334,7 @@ export function DashboardPageClient({
                     </p>
                   </div>
                 </div>
-                <p className="text-xs font-semibold tracking-tight text-foreground">
+                <p className="font-mono text-xs font-semibold tabular-nums tracking-tight text-foreground">
                   {formatCurrency(Number(inv.total), 'MUR', { decimals: 0 })}
                 </p>
               </Link>

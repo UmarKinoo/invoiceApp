@@ -317,7 +317,7 @@ export function InvoiceDetailClient({ invoice, client, printMode = false }: Invo
             </div>
             <div className="flex justify-between text-sm font-semibold text-primary">
               <span className="uppercase tracking-wider">Total</span>
-              <span className="text-xl">{formatCurrency(Number(invoice.total))}</span>
+              <span className="font-mono text-lg tabular-nums sm:text-xl">{formatCurrency(Number(invoice.total))}</span>
             </div>
           </div>
           {invoice.carNumber && (

@@ -10,6 +10,7 @@ const nextConfig = {
   // Your Next.js config here
   output: 'standalone', // Required for Docker deployment
   serverExternalPackages: ['@react-pdf/renderer'],
+  transpilePackages: ['geist'],
 
   webpack: (config) => {
     const projectRoot = path.resolve(__dirname)

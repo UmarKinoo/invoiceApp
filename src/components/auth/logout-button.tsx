@@ -2,13 +2,14 @@
 
 import { Button } from '@/components/ui/button'
 import { LogOut } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 import { clearAuthCookies } from '@/lib/auth'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
-export const LogoutButton = () => {
+export const LogoutButton = ({ className }: { className?: string }) => {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
@@ -39,20 +40,33 @@ export const LogoutButton = () => {
   }
 
   return (
-    <Button variant="outline" onClick={handleLogout} disabled={isLoading}>
-      {isLoading ? 'Signing out...' : 'Logout'}
+    <Button variant="outline" onClick={handleLogout} disabled={isLoading} className={cn(className)}>
+      <LogOut className="size-4 shrink-0" aria-hidden />
+      {isLoading ? 'Signing out...' : 'Log out'}
     </Button>
   )
 }
 
 export const LogoutIconButton = () => {
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(false)
+
   const handleLogout = async () => {
-    await clearAuthCookies()
+    setIsLoading(true)
+    try {
+      const result = await clearAuthCookies()
+      if (result.success) {
+        router.push('/')
+        router.refresh()
+      }
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
-    <Button variant="outline" size="icon" onClick={handleLogout}>
-      <LogOut />
+    <Button variant="outline" size="icon" onClick={handleLogout} disabled={isLoading} title="Log out">
+      <LogOut className="size-4" aria-hidden />
     </Button>
   )
 }

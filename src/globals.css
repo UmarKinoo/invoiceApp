@@ -157,6 +157,8 @@
 @theme inline {
   /* System font stack: San Francisco on Apple, Segoe UI on Windows, Roboto on Android */
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  /* Geist Mono for numbers (tabular figures) – set via GeistMono.variable on html */
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

@@ -175,12 +175,13 @@ export function ClientsPageClient({ initialClients }: { initialClients: ClientDo
           <Card key={client.id} className="overflow-hidden">
             <CardHeader className="flex flex-row items-center gap-4 space-y-0 pb-4">
               <div className="relative">
-                <Avatar className="size-12 rounded-xl">
+                <Avatar className="size-12 shrink-0 overflow-hidden rounded-full border border-border">
                   <AvatarImage
-                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(client.name ?? client.email ?? 'Contact')}&background=3b82f6&color=fff&size=200`}
+                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(client.name ?? client.email ?? 'Contact')}&background=ffffff&color=000000&size=200`}
                     alt={client.name ?? ''}
+                    className="object-cover"
                   />
-                  <AvatarFallback className="rounded-xl text-sm font-medium">
+                  <AvatarFallback className="bg-white text-black text-sm font-medium">
                     {(client.name ?? '?').slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>

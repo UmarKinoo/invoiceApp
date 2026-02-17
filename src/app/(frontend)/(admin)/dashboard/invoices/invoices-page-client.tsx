@@ -471,7 +471,7 @@ export function InvoicesPageClient({
             </div>
             <div className="flex justify-between border-t pt-2 text-xs font-semibold text-foreground">
               <span className="uppercase tracking-widest">Total Amount</span>
-              <span className="text-2xl">{formatCurrency(totals.total, settings.currency)}</span>
+              <span className="font-mono text-lg tabular-nums sm:text-2xl">{formatCurrency(totals.total, settings.currency)}</span>
             </div>
           </div>
         </div>
@@ -1012,25 +1012,23 @@ export function InvoicesPageClient({
             </div>
           </div>
 
-          <div className="absolute bottom-0 left-0 right-0 flex min-h-[5.5rem] flex-col justify-center border-t border-border bg-card/95 p-6 pb-[env(safe-area-inset-bottom,24px)] backdrop-blur-sm lg:relative lg:rounded-b-3xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Total
-                </p>
-                <p className="text-3xl font-semibold tracking-tight text-foreground">
-                  {formatCurrency(totals.total, settings.currency)}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={saveInvoice}
-                disabled={saveStatus === 'loading'}
-                className="rounded-xl bg-primary px-10 py-4 text-[10px] font-medium uppercase tracking-wider text-primary-foreground transition-opacity disabled:opacity-50"
-              >
-                {saveStatus === 'loading' ? 'Saving...' : 'Sync Records'}
-              </button>
+          <div className="absolute bottom-0 left-0 right-0 flex min-h-0 flex-row items-center justify-between gap-4 border-t border-border bg-card/95 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-sm lg:relative lg:rounded-b-3xl">
+            <div className="flex flex-col justify-center">
+              <p className="text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                Total
+              </p>
+              <p className="font-mono text-xl font-semibold tabular-nums tracking-tight text-foreground sm:text-2xl lg:text-3xl">
+                {formatCurrency(totals.total, settings.currency)}
+              </p>
             </div>
+            <button
+              type="button"
+              onClick={saveInvoice}
+              disabled={saveStatus === 'loading'}
+              className="shrink-0 rounded-xl bg-primary px-10 py-4 text-[10px] font-medium uppercase tracking-wider text-primary-foreground transition-opacity disabled:opacity-50"
+            >
+              {saveStatus === 'loading' ? 'Saving...' : 'Sync Records'}
+            </button>
           </div>
         </div>
       )}

@@ -217,7 +217,7 @@ export function QuoteDetailClient({ quote, client }: QuoteDetailClientProps) {
         </table>
         <div className="flex justify-between border-t border-border pt-2 text-sm font-semibold text-primary">
           <span className="uppercase tracking-wider">Total</span>
-          <span className="text-xl">{formatCurrency(Number(quote.total))}</span>
+          <span className="font-mono text-lg tabular-nums sm:text-xl">{formatCurrency(Number(quote.total))}</span>
         </div>
         </CardContent>
       </Card>
