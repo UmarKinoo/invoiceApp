@@ -85,6 +85,7 @@
     "resend": "^4.8.0",
     "sharp": "0.33.5",
     "sonner": "^2.0.7",
+    "strnum": "^2.1.0",
     "tailwind-merge": "^2.6.0",
     "tailwindcss": "^4.1.17",
     "three": "^0.170.0",

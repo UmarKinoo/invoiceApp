@@ -91,11 +91,8 @@ export function AppSidebar({ user }: { user: User | null }) {
   return (
     <Sidebar className="border-sidebar-border border-r">
       <SidebarHeader className="p-4">
-        <Link href="/dashboard" className="flex items-center gap-2.5 text-sidebar-foreground">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Receipt className="size-5" />
-          </div>
-          <span className="text-lg font-semibold tracking-tight">Invoice</span>
+        <Link href="/dashboard" className="text-sidebar-foreground">
+          <span className="text-lg font-semibold tracking-tight">Swiftbook</span>
         </Link>
       </SidebarHeader>
       <SidebarContent>

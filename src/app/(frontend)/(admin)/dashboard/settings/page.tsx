@@ -24,7 +24,7 @@ export default async function SettingsPage() {
     logoUrl: '',
     invoicePrefix: 'INV-',
     taxRateDefault: 0,
-    currency: 'USD',
+    currency: 'MUR',
   }
 
   const initial = settings

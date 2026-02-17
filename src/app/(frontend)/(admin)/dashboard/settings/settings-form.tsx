@@ -159,6 +159,7 @@ export function SettingsForm({ initial }: { initial: Initial }) {
                 <SelectValue placeholder="Select currency" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="MUR">MUR (Rs)</SelectItem>
                 <SelectItem value="USD">USD ($)</SelectItem>
                 <SelectItem value="EUR">EUR (€)</SelectItem>
                 <SelectItem value="GBP">GBP (£)</SelectItem>

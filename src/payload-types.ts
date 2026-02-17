@@ -673,7 +673,7 @@ export interface Setting {
    * Default tax %
    */
   taxRateDefault?: number | null;
-  currency?: ('USD' | 'EUR') | null;
+  currency?: ('MUR' | 'USD' | 'EUR') | null;
   updatedAt?: string | null;
   createdAt?: string | null;
 }

@@ -20,7 +20,7 @@ export const Transactions: CollectionConfig = {
           userId: req.user?.id,
           clientId,
           type: 'payment_received',
-          body: `Payment of $${doc.amount ?? 0} received${doc.reference ? ` (${doc.reference})` : ''}`,
+          body: `Payment of Rs ${Number(doc.amount ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2 })} received${doc.reference ? ` (${doc.reference})` : ''}`,
           relatedCollection: 'transactions',
           relatedId: doc.id,
           meta: {

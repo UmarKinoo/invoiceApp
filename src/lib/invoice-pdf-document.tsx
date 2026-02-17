@@ -1,5 +1,6 @@
 import React from 'react'
 import { Document, Page, View, Text, StyleSheet } from '@react-pdf/renderer'
+import { formatCurrency } from '@/lib/utils'
 
 const styles = StyleSheet.create({
   page: {
@@ -153,9 +154,10 @@ type InvoicePdfDocumentProps = {
     company?: string | null
     email?: string | null
   } | null
+  currency?: string
 }
 
-export function InvoicePdfDocument({ invoice, client }: InvoicePdfDocumentProps) {
+export function InvoicePdfDocument({ invoice, client, currency = 'MUR' }: InvoicePdfDocumentProps) {
   const items = invoice.items ?? []
   const subtotal =
     invoice.subtotal ??
@@ -186,11 +188,11 @@ export function InvoicePdfDocument({ invoice, client }: InvoicePdfDocumentProps)
               <View style={styles.tableCell}>
                 <Text style={styles.tableCellDesc}>{item.description ?? '—'}</Text>
                 <Text style={styles.tableCellMeta}>
-                  {item.quantity} × ${Number(item.rate ?? 0).toFixed(2)}
+                  {item.quantity} × {formatCurrency(Number(item.rate ?? 0), currency)}
                 </Text>
               </View>
               <Text style={styles.tableCellAmount}>
-                ${((item.quantity ?? 0) * (item.rate ?? 0)).toFixed(2)}
+                {formatCurrency((item.quantity ?? 0) * (item.rate ?? 0), currency)}
               </Text>
             </View>
           ))}
@@ -199,11 +201,11 @@ export function InvoicePdfDocument({ invoice, client }: InvoicePdfDocumentProps)
         <View style={styles.totals}>
           <View style={styles.totalRow}>
             <Text>Subtotal</Text>
-            <Text>${subtotal.toFixed(2)}</Text>
+            <Text>{formatCurrency(subtotal, currency)}</Text>
           </View>
           <View style={styles.totalRowMain}>
             <Text>TOTAL</Text>
-            <Text>${Number(invoice.total).toFixed(2)}</Text>
+            <Text>{formatCurrency(Number(invoice.total), currency)}</Text>
           </View>
         </View>
 

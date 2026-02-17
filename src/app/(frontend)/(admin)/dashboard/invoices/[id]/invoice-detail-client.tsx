@@ -14,6 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { formatCurrency } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -199,7 +200,7 @@ export function InvoiceDetailClient({ invoice, client, printMode = false }: Invo
               {invoice.invoiceNumber}
             </h2>
             <p className="text-sm text-muted-foreground">
-              {client?.name ?? 'Unknown'} • ${Number(invoice.total).toFixed(2)}
+              {client?.name ?? 'Unknown'} • {formatCurrency(Number(invoice.total))}
             </p>
           </div>
         </div>
@@ -299,11 +300,11 @@ export function InvoiceDetailClient({ invoice, client, printMode = false }: Invo
                   <TableCell className="py-4">
                     <p className="text-sm font-medium text-foreground">{item.description}</p>
                     <p className="text-[10px] text-muted-foreground">
-                      {item.quantity} × ${Number(item.rate).toFixed(2)}
+                      {item.quantity} × {formatCurrency(Number(item.rate))}
                     </p>
                   </TableCell>
                   <TableCell className="py-4 text-right text-sm font-medium text-foreground">
-                    ${((item.quantity ?? 0) * (item.rate ?? 0)).toFixed(2)}
+                    {formatCurrency((item.quantity ?? 0) * (item.rate ?? 0))}
                   </TableCell>
                 </TableRow>
               ))}
@@ -312,11 +313,11 @@ export function InvoiceDetailClient({ invoice, client, printMode = false }: Invo
           <div className="space-y-2">
             <div className="flex justify-between text-sm font-medium text-muted-foreground">
               <span>Subtotal</span>
-              <span>${subtotal.toFixed(2)}</span>
+              <span>{formatCurrency(subtotal)}</span>
             </div>
             <div className="flex justify-between text-sm font-semibold text-primary">
               <span className="uppercase tracking-wider">Total</span>
-              <span className="text-xl">${Number(invoice.total).toFixed(2)}</span>
+              <span className="text-xl">{formatCurrency(Number(invoice.total))}</span>
             </div>
           </div>
           {invoice.carNumber && (

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Sparkles, Loader2, Zap } from 'lucide-react'
+import { formatCurrency } from '@/lib/utils'
 import type { Client } from '@/payload-types'
 
 type LineItem = { description: string; quantity: number; rate: number }
@@ -193,7 +194,7 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
                 onChange={(e) => updateRow(idx, 'rate', Number(e.target.value) || 0)}
               />
               <span className="w-16 text-xs font-medium text-foreground">
-                ${(item.quantity * item.rate).toFixed(2)}
+                {formatCurrency(item.quantity * item.rate)}
               </span>
               <button type="button" onClick={() => removeRow(idx)} className="text-muted-foreground hover:text-destructive">
                 Remove
@@ -229,7 +230,7 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
       </div>
       {status === 'error' && <p className="text-sm text-destructive">Failed to save. Try again.</p>}
       <div className="flex items-center justify-between pt-4">
-        <p className="text-2xl font-semibold text-foreground">Total: ${total.toFixed(2)}</p>
+        <p className="text-2xl font-semibold text-foreground">Total: {formatCurrency(total)}</p>
         <div className="flex gap-3">
           <Link href="/dashboard/invoices" className="rounded-xl border border-border bg-muted px-6 py-3 text-sm font-medium text-foreground">
             Cancel

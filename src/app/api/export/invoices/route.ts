@@ -12,6 +12,12 @@ function escapeCsvCell(value: string | number | null | undefined): string {
   return s
 }
 
+function formatDateForCsv(value: string | Date | null | undefined): string {
+  if (value == null) return ''
+  const s = typeof value === 'string' ? value : value instanceof Date ? value.toISOString() : String(value)
+  return s.slice(0, 10)
+}
+
 export async function GET() {
   try {
     const payload = await getPayloadClient()
@@ -24,8 +30,8 @@ export async function GET() {
       return [
         escapeCsvCell(inv.invoiceNumber),
         escapeCsvCell(client),
-        escapeCsvCell(typeof inv.date === 'string' ? inv.date.slice(0, 10) : inv.date?.toString?.()?.slice(0, 10)),
-        escapeCsvCell(typeof inv.dueDate === 'string' ? inv.dueDate.slice(0, 10) : inv.dueDate?.toString?.()?.slice(0, 10)),
+        escapeCsvCell(formatDateForCsv(inv.date)),
+        escapeCsvCell(formatDateForCsv(inv.dueDate)),
         escapeCsvCell(inv.status),
         escapeCsvCell(inv.total),
       ]

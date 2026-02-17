@@ -3,9 +3,10 @@
 import React, { useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Wallet, Clock, Users, TrendingUp, FilePlus, UserPlus } from 'lucide-react'
+import { Wallet, Clock, Users, TrendingUp, FilePlus, UserPlus, User as UserIcon } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { User } from '@/payload-types'
+import { formatCurrency } from '@/lib/utils'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { DashboardChart } from '@/app/(frontend)/(admin)/dashboard/dashboard-chart'
 import { PageHeader } from '@/components/layout/page-header'
@@ -102,6 +103,7 @@ export function DashboardPageClient({
   }, [invoices])
 
   const formatDate = (d: string | null) => (d ? d.slice(0, 10) || d : '')
+  const profileAvatarUrl = avatarUrl(user)
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 lg:space-y-10">
@@ -111,11 +113,17 @@ export function DashboardPageClient({
         actions={
           <Button variant="ghost" size="icon" className="shrink-0 rounded-full" asChild>
             <Link href="/dashboard/settings">
-              <img
-                src={avatarUrl(user)}
-                alt="Profile"
-                className="size-10 rounded-full ring-2 ring-border"
-              />
+              {profileAvatarUrl ? (
+                <img
+                  src={profileAvatarUrl}
+                  alt="Profile"
+                  className="size-10 rounded-full ring-2 ring-border"
+                />
+              ) : (
+                <span className="flex size-10 items-center justify-center rounded-full bg-muted ring-2 ring-border text-muted-foreground">
+                  <UserIcon className="size-5" />
+                </span>
+              )}
             </Link>
           </Button>
         }
@@ -159,12 +167,12 @@ export function DashboardPageClient({
       <div className="grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-4 lg:gap-6">
         <StatCard
           label="Cash Flow"
-          value={`$${stats.paid.toLocaleString()}`}
+          value={formatCurrency(stats.paid)}
           icon={Wallet}
         />
         <StatCard
           label="Capital Out"
-          value={`$${stats.outstanding.toLocaleString()}`}
+          value={formatCurrency(stats.outstanding)}
           icon={Clock}
         />
         <StatCard label="Network" value={stats.clients.toString()} icon={Users} />
@@ -211,7 +219,7 @@ export function DashboardPageClient({
                   </div>
                 </div>
                 <p className="text-xs font-semibold tracking-tight text-foreground">
-                  ${Number(inv.total).toFixed(0)}
+                  {formatCurrency(Number(inv.total), 'MUR', { decimals: 0 })}
                 </p>
               </Link>
             ))}

@@ -18,8 +18,9 @@ export const Settings: GlobalConfig = {
     {
       name: 'currency',
       type: 'select',
-      defaultValue: 'USD',
+      defaultValue: 'MUR',
       options: [
+        { label: 'MUR (Rs)', value: 'MUR' },
         { label: 'USD ($)', value: 'USD' },
         { label: 'EUR (€)', value: 'EUR' },
       ],

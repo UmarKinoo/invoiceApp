@@ -60,7 +60,7 @@ export default async function InvoicesPage({
         logoUrl: settings.logoUrl ?? null,
         invoicePrefix: settings.invoicePrefix ?? 'INV-',
         taxRateDefault: Number(settings.taxRateDefault) ?? 0,
-        currency: settings.currency ?? 'USD',
+        currency: settings.currency ?? 'MUR',
       }
     : null
 

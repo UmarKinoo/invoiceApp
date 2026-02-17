@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { formatCurrency } from '@/lib/utils'
 import {
   CommandDialog,
   CommandEmpty,
@@ -108,7 +109,7 @@ export function SearchCommand() {
               >
                 <span className="font-medium">{inv.invoiceNumber ?? `#${inv.id}`}</span>
                 <span className="ml-2 text-muted-foreground">
-                  ${typeof inv.total === 'number' ? inv.total.toFixed(2) : '—'}
+                  {typeof inv.total === 'number' ? formatCurrency(inv.total) : '—'}
                 </span>
               </CommandItem>
             ))}
@@ -127,7 +128,7 @@ export function SearchCommand() {
               >
                 <span className="font-medium">{q.quoteNumber ?? `#${q.id}`}</span>
                 <span className="ml-2 text-muted-foreground">
-                  ${typeof q.total === 'number' ? q.total.toFixed(2) : '—'}
+                  {typeof q.total === 'number' ? formatCurrency(q.total) : '—'}
                 </span>
               </CommandItem>
             ))}

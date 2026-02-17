@@ -2,11 +2,10 @@ import { Section, Container } from '@/components/ds'
 import { LoginForm } from '@/components/auth/login-form'
 import { AuthBox } from '@/components/auth/auth-box'
 import { LoginPageToast } from '@/components/auth/login-page-toast'
+import { BeamsPageLayout } from '@/components/beams/BeamsPageLayout'
 
 import { getUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-
-import Link from 'next/link'
 
 import type { User } from '@/payload-types'
 
@@ -26,22 +25,18 @@ export default async function LoginPage({
   const params = await searchParams
 
   return (
-    <Section>
-      <Container>
-        <AuthBox>
-          <h1>Login</h1>
-          {(params.success || params.error) && (
-            <LoginPageToast success={params.success} error={params.error} />
-          )}
-          <LoginForm />
-          <p className="text-muted-foreground text-xs">
-            Don&apos;t have an account?{' '}
-            <Link className="text-foreground" href="/register">
-              Sign Up Now
-            </Link>
-          </p>
-        </AuthBox>
-      </Container>
-    </Section>
+    <BeamsPageLayout>
+      <Section>
+        <Container>
+          <AuthBox>
+            <h1>Login</h1>
+            {(params.success || params.error) && (
+              <LoginPageToast success={params.success} error={params.error} />
+            )}
+            <LoginForm />
+          </AuthBox>
+        </Container>
+      </Section>
+    </BeamsPageLayout>
   )
 }

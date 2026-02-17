@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { formatCurrency } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 
 const METHOD_LABELS: Record<string, string> = {
@@ -98,7 +99,7 @@ export function TransactionsListClient({
                         {client && 'name' in client ? client.name : 'Unknown'}
                       </td>
                       <td className="px-6 py-4 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                        + ${Number(tx.amount).toFixed(2)}
+                        + {formatCurrency(Number(tx.amount))}
                       </td>
                       <td className="px-6 py-4 text-sm text-muted-foreground">{tx.reference ?? '—'}</td>
                       <td className="px-6 py-4 text-sm">

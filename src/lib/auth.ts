@@ -74,6 +74,13 @@ export async function getUser(): Promise<User | null> {
     return user || null
   } catch (error) {
     console.error('Error getting user:', error)
+    // Clear invalid/expired token so it isn't sent on every request and can cause redirect loops
+    try {
+      const cookieStore = await cookies()
+      cookieStore.delete('payload-token')
+    } catch {
+      // ignore
+    }
     return null
   }
 }
@@ -118,7 +125,7 @@ export async function loginUser({
         cookieStore.set('payload-token', result.token, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
-          sameSite: 'strict',
+          sameSite: 'lax',
           path: '/',
           expires: expiresDate,
         })

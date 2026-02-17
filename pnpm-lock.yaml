@@ -194,6 +194,9 @@ importers:
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      strnum:
+        specifier: ^2.1.0
+        version: 2.1.1
       tailwind-merge:
         specifier: ^2.6.0
         version: 2.6.0

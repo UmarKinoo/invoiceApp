@@ -1,7 +1,7 @@
 import React from 'react'
 import { NextResponse } from 'next/server'
 import { getPayloadClient } from '@/lib/payload-server'
-import ReactPDF from '@react-pdf/renderer'
+import ReactPDF, { Document } from '@react-pdf/renderer'
 import { InvoicePdfDocument } from '@/lib/invoice-pdf-document'
 import type { Invoice } from '@/payload-types'
 
@@ -55,6 +55,9 @@ export async function GET(
     0
   )
 
+  const settings = await payload.findGlobal({ slug: 'settings' })
+  const currency = settings?.currency ?? 'MUR'
+
   const invoiceData = {
     invoiceNumber: inv.invoiceNumber ?? null,
     date: inv.date ?? null,
@@ -68,11 +71,13 @@ export async function GET(
   }
 
   try {
+    const doc = React.createElement(InvoicePdfDocument, {
+      invoice: invoiceData,
+      client: clientData,
+      currency,
+    })
     const pdfStream = await ReactPDF.renderToStream(
-      React.createElement(InvoicePdfDocument, {
-        invoice: invoiceData,
-        client: clientData,
-      })
+      doc as React.ReactElement<React.ComponentProps<typeof Document>>
     )
     const buffer = await streamToBuffer(pdfStream)
     const filename = `invoice-${inv.invoiceNumber ?? id}.pdf`.replace(

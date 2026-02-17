@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getPayloadClient } from '@/lib/payload-server'
 import { sendEmail } from '@/lib/email'
 import { createActivityLog } from '@/collections/hooks/createActivityLog'
+import type { Invoice } from '@/payload-types'
 
 export async function POST(
   req: Request,
@@ -34,8 +35,9 @@ export async function POST(
     return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
   }
 
-  const subject = body.subject?.trim() || `Invoice ${invoice.invoiceNumber ?? ''}`
-  const textBody = body.body?.trim() || `Please find your invoice ${invoice.invoiceNumber ?? ''} attached or linked. Thank you.`
+  const inv = invoice as Invoice
+  const subject = body.subject?.trim() || `Invoice ${inv.invoiceNumber ?? ''}`
+  const textBody = body.body?.trim() || `Please find your invoice ${inv.invoiceNumber ?? ''} attached or linked. Thank you.`
   const html = `
     <!DOCTYPE html>
     <html>
@@ -68,10 +70,10 @@ export async function POST(
   }
 
   const clientId =
-    typeof invoice.client === 'object' && invoice.client?.id
-      ? invoice.client.id
-      : typeof invoice.client === 'number'
-        ? invoice.client
+    typeof inv.client === 'object' && inv.client?.id
+      ? inv.client.id
+      : typeof inv.client === 'number'
+        ? inv.client
         : null
   if (clientId) {
     await createActivityLog({
@@ -79,13 +81,13 @@ export async function POST(
       userId: undefined,
       clientId,
       type: 'email_sent',
-      body: `Invoice ${invoice.invoiceNumber ?? ''} sent to ${to}`,
+      body: `Invoice ${inv.invoiceNumber ?? ''} sent to ${to}`,
       relatedCollection: 'invoices',
       relatedId: Number(id),
       meta: {
         subject,
         to,
-        invoiceNumber: invoice.invoiceNumber,
+        invoiceNumber: inv.invoiceNumber,
       },
     })
   }

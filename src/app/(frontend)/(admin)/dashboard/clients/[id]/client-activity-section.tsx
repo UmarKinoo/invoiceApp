@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { cn } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 
 const TYPE_LABELS: Record<string, string> = {
   note: 'Note',
@@ -149,12 +149,12 @@ function renderMetaSummary(act: ActivityDoc): React.ReactNode {
   switch (act.type) {
     case 'invoice_created':
       return meta.total != null ? (
-        <span className="text-muted-foreground">Total: ${Number(meta.total).toLocaleString()}</span>
+        <span className="text-muted-foreground">Total: {formatCurrency(Number(meta.total))}</span>
       ) : null
     case 'quote_created':
     case 'quote_sent':
       return meta.total != null ? (
-        <span className="text-muted-foreground">Total: ${Number(meta.total).toLocaleString()}</span>
+        <span className="text-muted-foreground">Total: {formatCurrency(Number(meta.total))}</span>
       ) : null
     case 'status_change':
       return (
@@ -165,7 +165,7 @@ function renderMetaSummary(act: ActivityDoc): React.ReactNode {
     case 'payment_received':
       return (
         <span className="text-muted-foreground">
-          ${meta.amount != null ? Number(meta.amount).toLocaleString() : '0'}
+          {meta.amount != null ? formatCurrency(Number(meta.amount)) : formatCurrency(0)}
           {meta.method ? ` via ${String(meta.method).replace('_', ' ')}` : ''}
           {meta.reference ? ` (${meta.reference})` : ''}
         </span>

@@ -30,9 +30,10 @@ export async function GET() {
     }
     const { GoogleGenAI } = await import('@google/genai')
     const ai = new GoogleGenAI({ apiKey })
+    const prompt = `Act as a business growth consultant. Analyze this data and provide 3 actionable insights to improve cash flow or client retention: ${JSON.stringify(summary)}`
     const response = await ai.models.generateContent({
       model: 'gemini-2.0-flash',
-      contents: `Act as a business growth consultant. Analyze this data and provide 3 actionable insights to improve cash flow or client retention: ${JSON.stringify(summary)}`,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
     })
     const text = response.text ?? 'No insights generated.'
     return NextResponse.json({ text })

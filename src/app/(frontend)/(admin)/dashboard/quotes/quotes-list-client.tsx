@@ -14,6 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { formatCurrency } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 
 type QuoteDoc = {
@@ -100,7 +101,7 @@ export function QuotesListClient({
                 </p>
                 <div className="flex items-center justify-between border-t border-border pt-4">
                   <span className="text-xl font-semibold text-foreground">
-                    ${Number(q.total).toFixed(2)}
+                    {formatCurrency(Number(q.total))}
                   </span>
                   <div className="flex items-center gap-2">
                     <Link

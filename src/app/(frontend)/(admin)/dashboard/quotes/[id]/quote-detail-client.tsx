@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { formatCurrency } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 
 type QuoteDetailClientProps = {
@@ -120,7 +121,7 @@ export function QuoteDetailClient({ quote, client }: QuoteDetailClientProps) {
               {quote.quoteNumber}
             </h2>
             <p className="text-sm text-muted-foreground">
-              {client?.name ?? 'Unknown'} • ${Number(quote.total).toFixed(2)}
+              {client?.name ?? 'Unknown'} • {formatCurrency(Number(quote.total))}
             </p>
           </div>
         </div>
@@ -204,11 +205,11 @@ export function QuoteDetailClient({ quote, client }: QuoteDetailClientProps) {
                 <td className="py-4">
                   <p className="text-sm font-medium text-foreground">{item.description}</p>
                   <p className="text-[10px] text-muted-foreground">
-                    {item.quantity} × ${Number(item.rate).toFixed(2)}
+                    {item.quantity} × {formatCurrency(Number(item.rate))}
                   </p>
                 </td>
                 <td className="py-4 text-right text-sm font-medium text-foreground">
-                  ${((item.quantity ?? 0) * (item.rate ?? 0)).toFixed(2)}
+                  {formatCurrency((item.quantity ?? 0) * (item.rate ?? 0))}
                 </td>
               </tr>
             ))}
@@ -216,7 +217,7 @@ export function QuoteDetailClient({ quote, client }: QuoteDetailClientProps) {
         </table>
         <div className="flex justify-between border-t border-border pt-2 text-sm font-semibold text-primary">
           <span className="uppercase tracking-wider">Total</span>
-          <span className="text-xl">${Number(quote.total).toFixed(2)}</span>
+          <span className="text-xl">{formatCurrency(Number(quote.total))}</span>
         </div>
         </CardContent>
       </Card>

@@ -17,6 +17,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
+import { formatCurrency } from '@/lib/utils'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -86,7 +87,7 @@ const defaultSettings: SettingsDoc = {
   logoUrl: null,
   invoicePrefix: 'INV-',
   taxRateDefault: 0,
-  currency: 'USD',
+  currency: 'MUR',
 }
 
 export function InvoicesPageClient({
@@ -452,11 +453,11 @@ export function InvoicesPageClient({
                   <td className="py-4">
                     <p className="text-sm font-bold">{item.description}</p>
                     <p className="text-[10px] text-slate-400">
-                      {item.quantity} × ${item.rate.toFixed(2)}
+                      {item.quantity} × {formatCurrency(item.rate, settings.currency)}
                     </p>
                   </td>
                   <td className="py-4 text-right font-black text-sm">
-                    ${(item.quantity * item.rate).toFixed(2)}
+                    {formatCurrency(item.quantity * item.rate, settings.currency)}
                   </td>
                 </tr>
               ))}
@@ -466,11 +467,11 @@ export function InvoicesPageClient({
           <div className="space-y-2 border-t pt-6">
             <div className="flex justify-between text-xs font-bold text-slate-500">
               <span>Subtotal</span>
-              <span>${totals.subtotal.toFixed(2)}</span>
+              <span>{formatCurrency(totals.subtotal, settings.currency)}</span>
             </div>
             <div className="flex justify-between border-t pt-2 text-xs font-semibold text-foreground">
               <span className="uppercase tracking-widest">Total Amount</span>
-              <span className="text-2xl">${totals.total.toFixed(2)}</span>
+              <span className="text-2xl">{formatCurrency(totals.total, settings.currency)}</span>
             </div>
           </div>
         </div>
@@ -606,7 +607,7 @@ export function InvoicesPageClient({
                     </div>
                     <div className="text-right flex flex-col items-end shrink-0 ml-4">
                       <p className="text-base font-semibold text-foreground lg:text-lg">
-                        ${Number(inv.total).toFixed(2)}
+                        {formatCurrency(Number(inv.total), settings.currency)}
                       </p>
                       <span
                         className={`mt-1 text-[8px] font-black px-2 py-0.5 rounded-md uppercase border ${
@@ -901,7 +902,7 @@ export function InvoicesPageClient({
                         <div className="flex-1 text-right flex flex-col justify-end">
                           <p className="mb-1 text-[8px] font-medium uppercase text-muted-foreground">Amount</p>
                           <p className="text-xs font-medium text-foreground">
-                            ${(item.quantity * item.rate).toFixed(2)}
+                            {formatCurrency(item.quantity * item.rate, settings.currency)}
                           </p>
                         </div>
                       </div>
@@ -1018,7 +1019,7 @@ export function InvoicesPageClient({
                   Total
                 </p>
                 <p className="text-3xl font-semibold tracking-tight text-foreground">
-                  ${totals.total.toFixed(2)}
+                  {formatCurrency(totals.total, settings.currency)}
                 </p>
               </div>
               <button

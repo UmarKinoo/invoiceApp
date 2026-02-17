@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { formatCurrency } from '@/lib/utils'
 import type { Client } from '@/payload-types'
 
 type LineItem = { description: string; quantity: number; rate: number }
@@ -154,7 +155,7 @@ export function QuoteForm({ initialQuote }: { initialQuote?: InitialQuote | null
         </div>
       </div>
       <div className="flex items-center justify-between pt-4">
-        <p className="text-2xl font-semibold text-foreground">Total: ${total.toFixed(2)}</p>
+        <p className="text-2xl font-semibold text-foreground">Total: {formatCurrency(total)}</p>
         <div className="flex gap-3">
           <Link href="/dashboard/quotes" className="rounded-xl border border-border bg-muted px-6 py-3 text-sm font-medium text-foreground">
             Cancel

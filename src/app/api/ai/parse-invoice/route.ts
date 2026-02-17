@@ -20,26 +20,27 @@ export async function POST(req: Request) {
         { status: 503 }
       )
     }
-    const { GoogleGenAI, Type } = await import('@google/genai')
+    const { GoogleGenAI } = await import('@google/genai')
     const ai = new GoogleGenAI({ apiKey })
+    const textPrompt = `Extract invoice details from this text: "${prompt}". Return structured data with a list of items (description, quantity, rate), and if mentioned, the client name and notes.`
     const response = await ai.models.generateContent({
       model: 'gemini-2.0-flash',
-      contents: `Extract invoice details from this text: "${prompt}". Return structured data with a list of items (description, quantity, rate), and if mentioned, the client name and notes.`,
+      contents: [{ role: 'user', parts: [{ text: textPrompt }] }],
       config: {
         responseMimeType: 'application/json',
         responseSchema: {
-          type: Type.OBJECT,
+          type: 'OBJECT',
           properties: {
-            clientName: { type: Type.STRING },
-            notes: { type: Type.STRING },
+            clientName: { type: 'STRING' },
+            notes: { type: 'STRING' },
             items: {
-              type: Type.ARRAY,
+              type: 'ARRAY',
               items: {
-                type: Type.OBJECT,
+                type: 'OBJECT',
                 properties: {
-                  description: { type: Type.STRING },
-                  quantity: { type: Type.NUMBER },
-                  rate: { type: Type.NUMBER },
+                  description: { type: 'STRING' },
+                  quantity: { type: 'NUMBER' },
+                  rate: { type: 'NUMBER' },
                 },
                 required: ['description', 'quantity', 'rate'],
               },
