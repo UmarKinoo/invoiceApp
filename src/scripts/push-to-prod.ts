@@ -3,7 +3,7 @@
  *
  * Set in .env:
  *   DATABASE_URI  = local DB (source)
- *   DB_PROD       = prod DB (target; use %23 for # in password)
+ *   SUPABASE_URL  or  DB_PROD  = prod DB (target; use %23 for # in password)
  *
  * Run: pnpm run push-to-prod
  *
@@ -58,9 +58,9 @@ async function fetchAll(payload: { find: (args: { collection: string; limit: num
 async function main() {
   loadEnv()
   const localUri = process.env.DATABASE_URI
-  const prodUri = process.env.DB_PROD
+  const prodUri = process.env.SUPABASE_URL || process.env.DB_PROD
   if (!localUri || !prodUri) {
-    console.error('Set both DATABASE_URI (local) and DB_PROD (prod) in .env')
+    console.error('Set DATABASE_URI (local) and SUPABASE_URL or DB_PROD (prod) in .env')
     process.exit(1)
   }
 

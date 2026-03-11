@@ -1,33 +1,27 @@
-import { createClient } from '@supabase/supabase-js'
+import { getPayloadClient } from '@/lib/payload-server'
 
 /**
- * Ping endpoint for Vercel Cron. Runs a tiny query so Supabase (free tier) stays active.
- * Requires: SUPABASE_URL, SUPABASE_ANON_KEY, and a table "health_check" with at least one row.
- * Create it in Supabase SQL: CREATE TABLE health_check (id serial PRIMARY KEY);
- * INSERT INTO health_check (id) VALUES (1);
+ * Ping endpoint for Vercel Cron. Runs a tiny DB query so Supabase (free tier) stays active.
+ * Uses the same DATABASE_URI as the app; no extra env vars needed.
+ * Vercel cron: vercel.json has "0 */6 * * *" (every 6 hours).
  */
 export const dynamic = 'force-dynamic'
 export const maxDuration = 10
 
 export async function GET() {
-  const url = process.env.SUPABASE_URL
-  const anonKey = process.env.SUPABASE_ANON_KEY
-  if (!url || !anonKey) {
+  try {
+    const payload = await getPayloadClient()
+    const result = await payload.count({ collection: 'health_check' })
+    return Response.json({
+      status: 'ok',
+      db: 'connected',
+      health_check_count: result?.totalDocs ?? 0,
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
     return Response.json(
-      { status: 'error', error: 'Missing SUPABASE_URL or SUPABASE_ANON_KEY' },
+      { status: 'error', error: message },
       { status: 500 }
     )
   }
-
-  const supabase = createClient(url, anonKey)
-  const { data, error } = await supabase
-    .from('health_check')
-    .select('*')
-    .limit(1)
-
-  return Response.json({
-    status: 'ok',
-    data,
-    error: error?.message ?? null,
-  })
 }
