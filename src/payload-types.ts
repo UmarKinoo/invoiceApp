@@ -75,7 +75,6 @@ export interface Config {
     tasks: Task;
     transactions: Transaction;
     activity: Activity;
-    health_check: HealthCheck;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -91,7 +90,6 @@ export interface Config {
     tasks: TasksSelect<false> | TasksSelect<true>;
     transactions: TransactionsSelect<false> | TransactionsSelect<true>;
     activity: ActivitySelect<false> | ActivitySelect<true>;
-    health_check: HealthCheckSelect<false> | HealthCheckSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -360,21 +358,6 @@ export interface Activity {
   createdAt: string;
 }
 /**
- * Table for DB health checks (e.g. external monitoring).
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "health_check".
- */
-export interface HealthCheck {
-  id: number;
-  /**
-   * Optional status (e.g. ok)
-   */
-  status?: string | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
@@ -429,10 +412,6 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'activity';
         value: number | Activity;
-      } | null)
-    | ({
-        relationTo: 'health_check';
-        value: number | HealthCheck;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -636,15 +615,6 @@ export interface ActivitySelect<T extends boolean = true> {
   relatedId?: T;
   meta?: T;
   createdBy?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "health_check_select".
- */
-export interface HealthCheckSelect<T extends boolean = true> {
-  status?: T;
   updatedAt?: T;
   createdAt?: T;
 }

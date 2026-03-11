@@ -8,11 +8,11 @@ export const maxDuration = 10
 export async function GET() {
   try {
     const payload = await getPayloadClient()
-    const result = await payload.count({ collection: 'health_check' })
+    const result = await payload.count({ collection: 'users' })
     return Response.json({
       status: 'ok',
       db: 'connected',
-      health_check_count: result?.totalDocs ?? 0,
+      users_count: result?.totalDocs ?? 0,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'

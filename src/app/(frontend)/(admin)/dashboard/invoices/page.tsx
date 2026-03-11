@@ -40,7 +40,8 @@ export default async function InvoicesPage({
     totalPages = totalDocs > 0 ? Math.max(1, Math.ceil(totalDocs / LIST_PAGE_SIZE)) : 1
     clients = (clRes.docs ?? []) as Client[]
     settings = settingsRes
-  } catch {
+  } catch (err) {
+    console.error('[InvoicesPage] Failed to load data:', err)
     invoices = []
     totalPages = 1
     totalDocs = 0
