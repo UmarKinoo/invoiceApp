@@ -12,8 +12,8 @@ export default async function DashboardPage() {
   try {
     const payload = await getPayloadClient()
     const [invRes, clientsRes] = await Promise.all([
-      payload.find({ collection: 'invoices', limit: 100 }),
-      payload.find({ collection: 'clients', limit: 1000 }),
+      payload.find({ collection: 'invoices', limit: 10, sort: '-updatedAt' }),
+      payload.find({ collection: 'clients', limit: 50 }),
     ])
     invoices = (invRes.docs ?? []) as Invoice[]
     clients = (clientsRes.docs ?? []) as Client[]

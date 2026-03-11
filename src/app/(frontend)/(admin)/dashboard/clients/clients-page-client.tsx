@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Download, Plus, Mail, Phone, Pencil, Trash2 } from 'lucide-react'
+import { createClient, deleteClient } from './actions'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +29,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { PageHeader } from '@/components/layout/page-header'
+import { LIST_PAGE_SIZE } from '@/lib/constants'
+import { ListPagination } from '@/components/dashboard/list-pagination'
 
 type ClientDoc = {
   id: string
@@ -35,10 +38,21 @@ type ClientDoc = {
   company?: string | null
   email: string | null
   phone?: string | null
+  brn?: string | null
   address?: string | null
 }
 
-export function ClientsPageClient({ initialClients }: { initialClients: ClientDoc[] }) {
+export function ClientsPageClient({
+  initialClients,
+  totalPages = 1,
+  totalDocs = 0,
+  currentPage = 1,
+}: {
+  initialClients: ClientDoc[]
+  totalPages?: number
+  totalDocs?: number
+  currentPage?: number
+}) {
   const router = useRouter()
   const [showAdd, setShowAdd] = useState(false)
   const [deleteClientId, setDeleteClientId] = useState<string | null>(null)
@@ -48,38 +62,35 @@ export function ClientsPageClient({ initialClients }: { initialClients: ClientDo
     company: '',
     email: '',
     phone: '',
+    brn: '',
     address: '',
   })
 
   const handleDeleteClient = async () => {
     if (!deleteClientId) return
     setDeleteLoading(true)
-    try {
-      const res = await fetch(`/api/clients/${deleteClientId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed')
+    const result = await deleteClient(Number(deleteClientId))
+    if (result.ok) {
       setDeleteClientId(null)
       router.refresh()
-    } catch {
-      setDeleteLoading(false)
-    } finally {
-      setDeleteLoading(false)
     }
+    setDeleteLoading(false)
   }
 
   const handleAdd = async () => {
     if (!newClient.name || !newClient.email) return
-    try {
-      const res = await fetch('/api/clients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newClient),
-      })
-      if (!res.ok) throw new Error('Failed')
+    const result = await createClient({
+      name: newClient.name,
+      company: newClient.company || undefined,
+      email: newClient.email,
+      phone: newClient.phone || undefined,
+      brn: newClient.brn || undefined,
+      address: newClient.address || undefined,
+    })
+    if (result.doc) {
       setShowAdd(false)
-      setNewClient({ name: '', company: '', email: '', phone: '', address: '' })
+      setNewClient({ name: '', company: '', email: '', phone: '', brn: '', address: '' })
       router.refresh()
-    } catch {
-      // keep form open on error
     }
   }
 
@@ -146,6 +157,15 @@ export function ClientsPageClient({ initialClients }: { initialClients: ClientDo
                   onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
                 />
               </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>BRN (Business Registration Number)</Label>
+                <Input
+                  type="text"
+                  placeholder="Optional — if they have one"
+                  value={newClient.brn}
+                  onChange={(e) => setNewClient({ ...newClient, brn: e.target.value })}
+                />
+              </div>
             </div>
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={() => setShowAdd(false)}>
@@ -168,6 +188,12 @@ export function ClientsPageClient({ initialClients }: { initialClients: ClientDo
           tabIndex={0}
           aria-label="Close"
         />
+      )}
+
+      {totalDocs > 0 && (
+        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-2">
+          Showing {(currentPage - 1) * LIST_PAGE_SIZE + 1}–{Math.min(currentPage * LIST_PAGE_SIZE, totalDocs)} of {totalDocs} contacts
+        </p>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 lg:grid-cols-3 lg:gap-6">
@@ -207,6 +233,12 @@ export function ClientsPageClient({ initialClients }: { initialClients: ClientDo
                   <span className="truncate">{client.phone}</span>
                 </div>
               ) : null}
+              {client.brn ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">BRN</span>
+                  <span className="truncate">{client.brn}</span>
+                </div>
+              ) : null}
             </CardContent>
             <Separator />
             <CardFooter className="flex flex-row items-center justify-between gap-2">
@@ -234,6 +266,12 @@ export function ClientsPageClient({ initialClients }: { initialClients: ClientDo
           </Card>
         ))}
       </div>
+
+      <ListPagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        basePath="/dashboard/clients"
+      />
 
       <AlertDialog open={!!deleteClientId} onOpenChange={(open) => !open && setDeleteClientId(null)}>
         <AlertDialogContent>

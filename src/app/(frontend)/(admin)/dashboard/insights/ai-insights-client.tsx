@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Sparkles, Loader2 } from 'lucide-react'
+import { getAiInsights } from '../actions/ai'
 
 export function AIInsightsClient() {
   const [insight, setInsight] = useState('')
@@ -10,18 +11,15 @@ export function AIInsightsClient() {
   const fetchInsights = async () => {
     setLoading(true)
     setInsight('')
-    try {
-      const res = await fetch('/api/ai/insights')
-      if (!res.ok) throw new Error('Failed')
-      const data = await res.json()
-      setInsight(data.text ?? 'No insights generated.')
-    } catch {
+    const result = await getAiInsights()
+    if ('text' in result) {
+      setInsight(result.text ?? 'No insights generated.')
+    } else {
       setInsight(
         'Awaiting data synchronization. Finalize active invoices to unlock deep analytics. Ensure GEMINI_API_KEY is set for AI insights.'
       )
-    } finally {
-      setLoading(false)
     }
+    setLoading(false)
   }
 
   useEffect(() => {

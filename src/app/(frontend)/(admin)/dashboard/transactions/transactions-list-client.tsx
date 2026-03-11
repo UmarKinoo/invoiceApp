@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Trash2, Wallet } from 'lucide-react'
+import { deleteTransaction } from './actions'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,17 +47,13 @@ export function TransactionsListClient({
   const handleDelete = async () => {
     if (deleteId == null) return
     setDeleteLoading(true)
-    try {
-      const res = await fetch(`/api/transactions/${deleteId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed')
+    const result = await deleteTransaction(deleteId)
+    if (result.ok) {
       setTransactions((prev) => prev.filter((t) => t.id !== deleteId))
       setDeleteId(null)
       router.refresh()
-    } catch {
-      setDeleteLoading(false)
-    } finally {
-      setDeleteLoading(false)
     }
+    setDeleteLoading(false)
   }
 
   return (

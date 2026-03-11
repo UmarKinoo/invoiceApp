@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import type { Client } from '@/payload-types'
+import { getClients } from '../clients/actions'
+import { createTask } from './actions'
 
 export function AddTaskForm() {
   const router = useRouter()
-  const [clients, setClients] = useState<Client[]>([])
+  const [clients, setClients] = useState<{ id: number; name: string | null; company: string | null; email: string | null }[]>([])
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [title, setTitle] = useState('')
   const [dueDate, setDueDate] = useState('')
@@ -15,32 +16,24 @@ export function AddTaskForm() {
   const [clientId, setClientId] = useState('')
 
   useEffect(() => {
-    fetch('/api/clients?limit=500')
-      .then((r) => r.json())
-      .then((data) => setClients(data.docs ?? []))
-      .catch(() => setClients([]))
+    getClients(500).then((res) => setClients(res.docs))
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title.trim()) return
     setStatus('loading')
-    try {
-      const res = await fetch('/api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: title.trim(),
-          dueDate: dueDate || undefined,
-          priority,
-          client: clientId ? Number(clientId) : undefined,
-          completed: false,
-        }),
-      })
-      if (!res.ok) throw new Error('Failed')
+    const result = await createTask({
+      title: title.trim(),
+      dueDate: dueDate || undefined,
+      priority,
+      client: clientId ? Number(clientId) : undefined,
+      completed: false,
+    })
+    if (result.doc) {
       router.push('/dashboard/tasks')
       router.refresh()
-    } catch {
+    } else {
       setStatus('error')
     }
   }

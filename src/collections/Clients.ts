@@ -17,6 +17,7 @@ export const Clients: CollectionConfig = {
     { name: 'company', type: 'text' },
     { name: 'email', type: 'email', required: true },
     { name: 'phone', type: 'text' },
+    { name: 'brn', type: 'text', admin: { description: 'Business Registration Number (if applicable)' } },
     { name: 'address', type: 'textarea' },
     {
       name: 'tags',

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Plus } from 'lucide-react'
 import { getPayloadClient } from '@/lib/payload-server'
+import { LIST_PAGE_SIZE } from '@/lib/constants'
 import { QuotesListClient } from './quotes-list-client'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
@@ -8,19 +9,35 @@ import type { Quote, Client } from '@/payload-types'
 
 export const dynamic = 'force-dynamic'
 
-export default async function QuotesPage() {
+export default async function QuotesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>
+}) {
+  const { page: pageParam } = await searchParams
+  const page = Math.max(1, parseInt(String(pageParam ?? '1'), 10) || 1)
+
   let quotes: Quote[] = []
+  let totalPages = 1
   let clients: Client[] = []
   try {
     const payload = await getPayloadClient()
     const [qRes, cRes] = await Promise.all([
-      payload.find({ collection: 'quotes', limit: 100, depth: 1 }),
-      payload.find({ collection: 'clients', limit: 500 }),
+      payload.find({
+        collection: 'quotes',
+        limit: LIST_PAGE_SIZE,
+        page,
+        depth: 1,
+        sort: '-updatedAt',
+      }),
+      payload.find({ collection: 'clients', limit: 100, depth: 0 }),
     ])
     quotes = (qRes.docs ?? []) as Quote[]
+    totalPages = qRes.totalPages ?? 1
     clients = (cRes.docs ?? []) as Client[]
   } catch {
     quotes = []
+    totalPages = 1
     clients = []
   }
 
@@ -47,7 +64,12 @@ export default async function QuotesPage() {
           </Button>
         }
       />
-      <QuotesListClient initialQuotes={quoteList} clients={clients.map((c) => ({ id: c.id, name: c.name ?? null }))} />
+      <QuotesListClient
+        initialQuotes={quoteList}
+        clients={clients.map((c) => ({ id: c.id, name: c.name ?? null }))}
+        totalPages={totalPages}
+        currentPage={page}
+      />
     </div>
   )
 }

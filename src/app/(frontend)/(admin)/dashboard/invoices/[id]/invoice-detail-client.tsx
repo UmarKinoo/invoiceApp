@@ -15,6 +15,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { formatCurrency } from '@/lib/utils'
+import { displayInvoiceNumber } from '@/lib/invoice-utils'
+import { updateInvoice, deleteInvoice } from '../actions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -98,9 +100,10 @@ export function InvoiceDetailClient({ invoice, client, printMode = false }: Invo
   const [statusSaving, setStatusSaving] = useState(false)
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [emailTo, setEmailTo] = useState(client?.email ?? '')
-  const [emailSubject, setEmailSubject] = useState(`Invoice ${invoice.invoiceNumber ?? ''}`)
+  const invoiceLabel = displayInvoiceNumber(invoice.invoiceNumber, String(invoice.id))
+  const [emailSubject, setEmailSubject] = useState(`Invoice ${invoiceLabel}`)
   const [emailBody, setEmailBody] = useState(
-    `Please find attached invoice ${invoice.invoiceNumber ?? ''}. Thank you for your business.`
+    `Please find attached invoice ${invoiceLabel}. Thank you for your business.`
   )
   const [sendStatus, setSendStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -112,20 +115,12 @@ export function InvoiceDetailClient({ invoice, client, printMode = false }: Invo
 
   const handleStatusChange = async (newStatus: string) => {
     setStatusSaving(true)
-    try {
-      const res = await fetch(`/api/invoices/${invoice.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      })
-      if (!res.ok) throw new Error('Failed')
+    const result = await updateInvoice(Number(invoice.id), { status: newStatus })
+    if (result.doc) {
       setStatus(newStatus)
       router.refresh()
-    } catch {
-      // keep current status
-    } finally {
-      setStatusSaving(false)
     }
+    setStatusSaving(false)
   }
 
   const handleSendInvoice = async () => {
@@ -137,7 +132,7 @@ export function InvoiceDetailClient({ invoice, client, printMode = false }: Invo
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: emailTo.trim(),
-          subject: emailSubject.trim() || `Invoice ${invoice.invoiceNumber ?? ''}`,
+          subject: emailSubject.trim() || `Invoice ${invoiceLabel}`,
           body: emailBody.trim(),
         }),
       })
@@ -161,7 +156,7 @@ export function InvoiceDetailClient({ invoice, client, printMode = false }: Invo
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `invoice-${invoice.invoiceNumber ?? invoice.id}.pdf`
+      a.download = `invoice-${invoiceLabel || invoice.id}.pdf`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -175,14 +170,12 @@ export function InvoiceDetailClient({ invoice, client, printMode = false }: Invo
 
   const handleDelete = async () => {
     setDeleteLoading(true)
-    try {
-      const res = await fetch(`/api/invoices/${invoice.id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed')
+    const result = await deleteInvoice(Number(invoice.id))
+    if (result.ok) {
       router.push('/dashboard/invoices')
       router.refresh()
-    } catch {
-      setDeleteLoading(false)
     }
+    setDeleteLoading(false)
   }
 
   return (
@@ -197,7 +190,7 @@ export function InvoiceDetailClient({ invoice, client, printMode = false }: Invo
           </Button>
           <div>
             <h2 className="text-2xl font-semibold tracking-tight text-foreground">
-              {invoice.invoiceNumber}
+              {invoiceLabel}
             </h2>
             <p className="text-sm text-muted-foreground">
               {client?.name ?? 'Unknown'} • {formatCurrency(Number(invoice.total))}
@@ -374,7 +367,7 @@ export function InvoiceDetailClient({ invoice, client, printMode = false }: Invo
           <DialogHeader>
             <DialogTitle>Send Invoice</DialogTitle>
             <DialogDescription>
-              Email invoice {invoice.invoiceNumber ?? ''} to the client. You can edit the recipient and message below.
+              Email invoice {invoiceLabel} to the client. You can edit the recipient and message below.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">

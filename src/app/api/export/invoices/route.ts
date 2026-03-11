@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getPayloadClient } from '@/lib/payload-server'
+import { normalizeInvoiceNumberForExport } from '@/lib/invoice-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,7 +29,7 @@ export async function GET() {
     const rows = docs.map((inv) => {
       const client = typeof inv.client === 'object' && inv.client && 'name' in inv.client ? inv.client.name : '—'
       return [
-        escapeCsvCell(inv.invoiceNumber),
+        escapeCsvCell(normalizeInvoiceNumberForExport(inv.invoiceNumber)),
         escapeCsvCell(client),
         escapeCsvCell(formatDateForCsv(inv.date)),
         escapeCsvCell(formatDateForCsv(inv.dueDate)),

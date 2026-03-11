@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, Trash2 } from 'lucide-react'
 import type { Task } from '@/payload-types'
+import { updateTask, deleteTask } from './actions'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,30 +37,20 @@ export function TasksList({
   const toggleComplete = async (id: number) => {
     const task = tasks.find((t) => t.id === id)
     if (!task) return
-    try {
-      await fetch(`/api/tasks/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ completed: !task.completed }),
-      })
-      router.refresh()
-    } catch {}
+    await updateTask(id, { completed: !task.completed })
+    router.refresh()
   }
 
   const handleDelete = async () => {
     if (deleteTaskId == null) return
     setDeleteLoading(true)
-    try {
-      const res = await fetch(`/api/tasks/${deleteTaskId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed')
+    const result = await deleteTask(deleteTaskId)
+    if (result.ok) {
       setTasks((prev) => prev.filter((t) => t.id !== deleteTaskId))
       setDeleteTaskId(null)
       router.refresh()
-    } catch {
-      setDeleteLoading(false)
-    } finally {
-      setDeleteLoading(false)
     }
+    setDeleteLoading(false)
   }
 
   return (

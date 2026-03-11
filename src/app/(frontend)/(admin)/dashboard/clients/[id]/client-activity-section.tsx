@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { createActivityNote } from '../../actions/activity'
 import {
   StickyNote,
   FileText,
@@ -201,39 +202,25 @@ export function ClientActivitySection({
     e.preventDefault()
     if (!noteBody.trim()) return
     setAddStatus('loading')
-    try {
-      const res = await fetch('/api/activity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client: Number(clientId),
-          type: 'note',
-          body: noteBody.trim(),
-        }),
-      })
-      if (!res.ok) throw new Error('Failed')
-      const data = await res.json()
-      const doc = data.doc ?? data
-      setActivities((prev) => [
-        {
-          id: doc.id,
-          type: 'note',
-          body: doc.body ?? noteBody.trim(),
-          createdAt: doc.createdAt ?? new Date().toISOString(),
-          createdBy: doc.createdBy ?? null,
-          relatedCollection: null,
-          relatedId: null,
-          meta: null,
-        },
-        ...prev,
-      ])
+    const result = await createActivityNote({ client: Number(clientId), body: noteBody.trim() })
+    if (result.doc) {
+      const newAct: ActivityDoc = {
+        id: result.doc.id,
+        type: 'note',
+        body: result.doc.body ?? noteBody.trim(),
+        createdAt: result.doc.createdAt ?? new Date().toISOString(),
+        createdBy: null,
+        relatedCollection: null,
+        relatedId: null,
+        meta: null,
+      }
+      setActivities((prev) => [newAct, ...prev])
       setNoteBody('')
       router.refresh()
-    } catch {
+    } else {
       setAddStatus('error')
-    } finally {
-      setAddStatus('idle')
     }
+    setAddStatus('idle')
   }
 
   return (

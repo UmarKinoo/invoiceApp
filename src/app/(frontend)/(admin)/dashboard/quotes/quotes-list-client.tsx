@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { FileText } from 'lucide-react'
+import { deleteQuote } from './actions'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,6 +17,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { formatCurrency } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
+import { ListPagination } from '@/components/dashboard/list-pagination'
 
 type QuoteDoc = {
   id: number
@@ -31,9 +33,13 @@ type ClientDoc = { id: number; name?: string | null }
 export function QuotesListClient({
   initialQuotes,
   clients,
+  totalPages = 1,
+  currentPage = 1,
 }: {
   initialQuotes: QuoteDoc[]
   clients: ClientDoc[]
+  totalPages?: number
+  currentPage?: number
 }) {
   const router = useRouter()
   const [quotes, setQuotes] = useState(initialQuotes)
@@ -55,17 +61,13 @@ export function QuotesListClient({
   const handleDelete = async () => {
     if (deleteId == null) return
     setDeleteLoading(true)
-    try {
-      const res = await fetch(`/api/quotes/${deleteId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed')
+    const result = await deleteQuote(deleteId)
+    if (result.ok) {
       setQuotes((prev) => prev.filter((q) => q.id !== deleteId))
       setDeleteId(null)
       router.refresh()
-    } catch {
-      setDeleteLoading(false)
-    } finally {
-      setDeleteLoading(false)
     }
+    setDeleteLoading(false)
   }
 
   return (
@@ -137,6 +139,14 @@ export function QuotesListClient({
             Create first quote
           </Link>
         </div>
+      )}
+
+      {totalPages > 1 && (
+        <ListPagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          basePath="/dashboard/quotes"
+        />
       )}
 
       <AlertDialog open={deleteId != null} onOpenChange={(open) => !open && setDeleteId(null)}>

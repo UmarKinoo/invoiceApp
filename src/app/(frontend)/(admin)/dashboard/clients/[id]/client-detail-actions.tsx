@@ -13,6 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { deleteClient } from '../actions'
 
 export function ClientDetailActions({ clientId }: { clientId: string }) {
   const router = useRouter()
@@ -21,14 +22,12 @@ export function ClientDetailActions({ clientId }: { clientId: string }) {
 
   const handleDelete = async () => {
     setDeleteLoading(true)
-    try {
-      const res = await fetch(`/api/clients/${clientId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed')
+    const result = await deleteClient(Number(clientId))
+    if (result.ok) {
       router.push('/dashboard/clients')
       router.refresh()
-    } catch {
-      setDeleteLoading(false)
     }
+    setDeleteLoading(false)
   }
 
   return (

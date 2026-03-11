@@ -4,6 +4,8 @@ import React, { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Pencil, FileText, Trash2, Loader2 } from 'lucide-react'
+import { deleteQuote } from '../actions'
+import { getNextInvoiceNumber, createInvoice } from '../../invoices/actions'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,14 +55,12 @@ export function QuoteDetailClient({ quote, client }: QuoteDetailClientProps) {
 
   const handleDelete = async () => {
     setDeleteLoading(true)
-    try {
-      const res = await fetch(`/api/quotes/${quote.id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed')
+    const result = await deleteQuote(quote.id)
+    if (result.ok) {
       router.push('/dashboard/quotes')
       router.refresh()
-    } catch {
-      setDeleteLoading(false)
     }
+    setDeleteLoading(false)
   }
 
   const clientIdForInvoice = quote.clientId ?? null
@@ -68,42 +68,33 @@ export function QuoteDetailClient({ quote, client }: QuoteDetailClientProps) {
   const handleCreateInvoice = async () => {
     if (clientIdForInvoice == null) return
     setCreateInvoiceLoading(true)
-    try {
-      const res = await fetch('/api/invoices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          client: clientIdForInvoice,
-          invoiceNumber: `INV-${Date.now().toString().slice(-6)}`,
-          date: new Date().toISOString().split('T')[0],
-          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          items: quote.items.map((i) => ({
-            description: i.description ?? '',
-            quantity: i.quantity ?? 0,
-            rate: i.rate ?? 0,
-          })),
-          status: 'draft',
-          taxRate: 0,
-          discount: 0,
-          shipping: 0,
-          notes: `Created from quote ${quote.quoteNumber ?? ''}`,
-          subtotal,
-          tax: 0,
-          total: quote.total,
-        }),
-      })
-      if (!res.ok) throw new Error('Failed')
-      const data = await res.json()
-      const newId = data.doc?.id ?? data.id
-      if (newId) {
-        router.push(`/dashboard/invoices/${newId}`)
-        router.refresh()
-      }
-    } catch {
-      setCreateInvoiceLoading(false)
-    } finally {
-      setCreateInvoiceLoading(false)
+    const nextResult = await getNextInvoiceNumber()
+    const nextNumber = 'nextNumber' in nextResult ? nextResult.nextNumber : 1001
+    const prefix = 'INV-'
+    const createResult = await createInvoice({
+      client: clientIdForInvoice,
+      invoiceNumber: `${prefix}${nextNumber}`,
+      date: new Date().toISOString().split('T')[0],
+      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      items: (quote.items ?? []).map((i) => ({
+        description: i.description ?? '',
+        quantity: i.quantity ?? 0,
+        rate: i.rate ?? 0,
+      })),
+      status: 'draft',
+      taxRate: 0,
+      discount: 0,
+      shipping: 0,
+      notes: `Created from quote ${quote.quoteNumber ?? ''}`,
+      subtotal,
+      tax: 0,
+      total: quote.total,
+    })
+    if (createResult.doc?.id) {
+      router.push(`/dashboard/invoices/${createResult.doc.id}`)
+      router.refresh()
     }
+    setCreateInvoiceLoading(false)
   }
 
   return (

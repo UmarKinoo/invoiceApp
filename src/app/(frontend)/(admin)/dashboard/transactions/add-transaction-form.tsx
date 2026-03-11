@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
-import type { Client } from '@/payload-types'
+import { getClients } from '../clients/actions'
+import { createTransaction } from './actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,7 +25,7 @@ import {
 
 export function AddTransactionForm() {
   const router = useRouter()
-  const [clients, setClients] = useState<Client[]>([])
+  const [clients, setClients] = useState<{ id: number; name: string | null; company: string | null; email: string | null }[]>([])
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [form, setForm] = useState({
@@ -36,29 +37,21 @@ export function AddTransactionForm() {
   })
 
   useEffect(() => {
-    fetch('/api/clients?limit=500')
-      .then((r) => r.json())
-      .then((data) => setClients(data.docs ?? []))
-      .catch(() => setClients([]))
+    getClients(500).then((res) => setClients(res.docs))
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.amount || !form.clientId) return
     setStatus('loading')
-    try {
-      const res = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: form.date,
-          amount: form.amount,
-          client: Number(form.clientId),
-          reference: form.reference || undefined,
-          method: form.method,
-        }),
-      })
-      if (!res.ok) throw new Error('Failed')
+    const result = await createTransaction({
+      date: form.date,
+      amount: form.amount,
+      client: Number(form.clientId),
+      reference: form.reference || undefined,
+      method: form.method,
+    })
+    if (result.doc) {
       setOpen(false)
       setForm({
         date: new Date().toISOString().split('T')[0],
@@ -68,11 +61,10 @@ export function AddTransactionForm() {
         method: 'stripe',
       })
       router.refresh()
-    } catch {
+    } else {
       setStatus('error')
-    } finally {
-      setStatus('idle')
     }
+    setStatus('idle')
   }
 
   return (

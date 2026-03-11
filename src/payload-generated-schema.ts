@@ -184,6 +184,7 @@ export const clients = pgTable(
     company: varchar('company'),
     email: varchar('email').notNull(),
     phone: varchar('phone'),
+    brn: varchar('brn'),
     address: varchar('address'),
     socials_twitter: varchar('socials_twitter'),
     socials_linkedin: varchar('socials_linkedin'),
@@ -389,6 +390,24 @@ export const activity = pgTable(
   ],
 )
 
+export const health_check = pgTable(
+  'health_check',
+  {
+    id: serial('id').primaryKey(),
+    status: varchar('status'),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 })
+      .defaultNow()
+      .notNull(),
+  },
+  (columns) => [
+    index('health_check_updated_at_idx').on(columns.updatedAt),
+    index('health_check_created_at_idx').on(columns.createdAt),
+  ],
+)
+
 export const payload_kv = pgTable(
   'payload_kv',
   {
@@ -433,6 +452,7 @@ export const payload_locked_documents_rels = pgTable(
     tasksID: integer('tasks_id'),
     transactionsID: integer('transactions_id'),
     activityID: integer('activity_id'),
+    health_checkID: integer('health_check_id'),
   },
   (columns) => [
     index('payload_locked_documents_rels_order_idx').on(columns.order),
@@ -446,6 +466,7 @@ export const payload_locked_documents_rels = pgTable(
     index('payload_locked_documents_rels_tasks_id_idx').on(columns.tasksID),
     index('payload_locked_documents_rels_transactions_id_idx').on(columns.transactionsID),
     index('payload_locked_documents_rels_activity_id_idx').on(columns.activityID),
+    index('payload_locked_documents_rels_health_check_id_idx').on(columns.health_checkID),
     foreignKey({
       columns: [columns['parent']],
       foreignColumns: [payload_locked_documents.id],
@@ -490,6 +511,11 @@ export const payload_locked_documents_rels = pgTable(
       columns: [columns['activityID']],
       foreignColumns: [activity.id],
       name: 'payload_locked_documents_rels_activity_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [columns['health_checkID']],
+      foreignColumns: [health_check.id],
+      name: 'payload_locked_documents_rels_health_check_fk',
     }).onDelete('cascade'),
   ],
 )
@@ -660,6 +686,7 @@ export const relations_activity = relations(activity, ({ one }) => ({
     relationName: 'createdBy',
   }),
 }))
+export const relations_health_check = relations(health_check, () => ({}))
 export const relations_payload_kv = relations(payload_kv, () => ({}))
 export const relations_payload_locked_documents_rels = relations(
   payload_locked_documents_rels,
@@ -708,6 +735,11 @@ export const relations_payload_locked_documents_rels = relations(
       fields: [payload_locked_documents_rels.activityID],
       references: [activity.id],
       relationName: 'activity',
+    }),
+    health_checkID: one(health_check, {
+      fields: [payload_locked_documents_rels.health_checkID],
+      references: [health_check.id],
+      relationName: 'health_check',
     }),
   }),
 )
@@ -763,6 +795,7 @@ type DatabaseSchema = {
   tasks: typeof tasks
   transactions: typeof transactions
   activity: typeof activity
+  health_check: typeof health_check
   payload_kv: typeof payload_kv
   payload_locked_documents: typeof payload_locked_documents
   payload_locked_documents_rels: typeof payload_locked_documents_rels
@@ -782,6 +815,7 @@ type DatabaseSchema = {
   relations_tasks: typeof relations_tasks
   relations_transactions: typeof relations_transactions
   relations_activity: typeof relations_activity
+  relations_health_check: typeof relations_health_check
   relations_payload_kv: typeof relations_payload_kv
   relations_payload_locked_documents_rels: typeof relations_payload_locked_documents_rels
   relations_payload_locked_documents: typeof relations_payload_locked_documents

@@ -1,3 +1,4 @@
+/** This app uses Payload CMS 3.x. Use payload.count() for totalDocs; find() returns PaginatedDocs. */
 import { payloadCloudPlugin } from '@payloadcms/payload-cloud'
 import { vercelBlobStorage } from '@payloadcms/storage-vercel-blob'
 import { postgresAdapter } from '@payloadcms/db-postgres'
@@ -16,6 +17,7 @@ import { Quotes } from '@/collections/Quotes'
 import { Tasks } from '@/collections/Tasks'
 import { Transactions } from '@/collections/Transactions'
 import { Activity } from '@/collections/Activity'
+import { HealthCheck } from '@/collections/HealthCheck'
 import { Settings } from '@/collections/Settings'
 
 const filename = fileURLToPath(import.meta.url)
@@ -28,7 +30,7 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Users, Media, Clients, Invoices, Quotes, Tasks, Transactions, Activity],
+  collections: [Users, Media, Clients, Invoices, Quotes, Tasks, Transactions, Activity, HealthCheck],
   globals: [Settings],
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',

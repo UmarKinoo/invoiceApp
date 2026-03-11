@@ -5,13 +5,15 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Sparkles, Loader2, Zap } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
-import type { Client } from '@/payload-types'
+import { getClients } from '@/app/(frontend)/(admin)/dashboard/clients/actions'
+import { getNextInvoiceNumber, createInvoice, updateInvoice } from '@/app/(frontend)/(admin)/dashboard/invoices/actions'
+import { parseInvoicePrompt } from '@/app/(frontend)/(admin)/dashboard/actions/ai'
 
 type LineItem = { description: string; quantity: number; rate: number }
 
 export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
   const router = useRouter()
-  const [clients, setClients] = useState<Client[]>([])
+  const [clients, setClients] = useState<{ id: number; name: string | null; company: string | null; email: string | null }[]>([])
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [clientId, setClientId] = useState<string>('')
   const [items, setItems] = useState<LineItem[]>([{ description: '', quantity: 1, rate: 0 }])
@@ -21,10 +23,7 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
   const [isAiLoading, setIsAiLoading] = useState(false)
 
   useEffect(() => {
-    fetch('/api/clients?limit=500')
-      .then((r) => r.json())
-      .then((data) => setClients(data.docs ?? []))
-      .catch(() => setClients([]))
+    getClients(500).then((res) => setClients(res.docs))
   }, [])
 
   const subtotal = items.reduce((acc, i) => acc + i.quantity * i.rate, 0)
@@ -44,17 +43,11 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
   const handleMagicFill = async () => {
     if (!aiPrompt.trim()) return
     setIsAiLoading(true)
-    try {
-      const res = await fetch('/api/ai/parse-invoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: aiPrompt }),
-      })
-      if (!res.ok) throw new Error('Failed')
-      const data = await res.json()
+    const data = await parseInvoicePrompt(aiPrompt)
+    if (!('error' in data)) {
       if (data.items?.length) {
         setItems(
-          data.items.map((it: { description?: string; quantity?: number; rate?: number }) => ({
+          data.items.map((it) => ({
             description: it.description ?? '',
             quantity: Number(it.quantity) ?? 0,
             rate: Number(it.rate) ?? 0,
@@ -62,53 +55,51 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
         )
       }
       if (data.clientName && clients.length) {
+        const search = (data.clientName ?? '').toLowerCase()
         const found = clients.find(
           (c) =>
-            c.name?.toLowerCase().includes(data.clientName.toLowerCase()) ||
-            (c as { company?: string }).company?.toLowerCase().includes(data.clientName.toLowerCase())
+            (c.name ?? '').toLowerCase().includes(search) ||
+            (c.company ?? '').toLowerCase().includes(search)
         )
         if (found) setClientId(String(found.id))
       }
       if (data.notes) setNotes(data.notes)
-    } catch {
-      // ignore
-    } finally {
-      setIsAiLoading(false)
-      setAiPrompt('')
     }
+    setIsAiLoading(false)
+    setAiPrompt('')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!clientId || items.length === 0 || items.every((i) => !i.description)) return
     setStatus('loading')
-    try {
-      const payload = {
-        client: Number(clientId),
-        invoiceNumber: `INV-${Date.now().toString().slice(-6)}`,
-        date: new Date().toISOString().split('T')[0],
-        dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        items,
-        status: 'draft',
-        taxRate,
-        discount: 0,
-        shipping: 0,
-        notes,
-        subtotal,
-        tax,
-        total,
-      }
-      const url = invoiceId ? `/api/invoices/${invoiceId}` : '/api/invoices'
-      const method = invoiceId ? 'PATCH' : 'POST'
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) throw new Error('Failed')
+    let invoiceNumber = `INV-${Date.now().toString().slice(-6)}`
+    if (!invoiceId) {
+      const nextResult = await getNextInvoiceNumber()
+      if ('nextNumber' in nextResult) invoiceNumber = `INV-${nextResult.nextNumber}`
+    }
+    const payload = {
+      client: Number(clientId),
+      invoiceNumber,
+      date: new Date().toISOString().split('T')[0],
+      dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      items,
+      status: 'draft' as const,
+      taxRate,
+      discount: 0,
+      shipping: 0,
+      notes,
+      subtotal,
+      tax,
+      total,
+    }
+    const result = invoiceId
+      ? await updateInvoice(Number(invoiceId), payload)
+      : await createInvoice(payload)
+    if (result.doc) {
       router.push('/dashboard/invoices')
       router.refresh()
-    } catch {
+    } else {
       setStatus('error')
     }
   }

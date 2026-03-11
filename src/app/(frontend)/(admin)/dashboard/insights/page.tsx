@@ -5,6 +5,7 @@ import { Brain, Loader2, Zap, TrendingUp, Cpu, Sparkles } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { getAiInsights } from '../actions/ai'
 
 export default function InsightsPage() {
   const [insight, setInsight] = useState('')
@@ -12,18 +13,15 @@ export default function InsightsPage() {
 
   const fetchInsights = async () => {
     setLoading(true)
-    try {
-      const res = await fetch('/api/ai/insights')
-      if (!res.ok) throw new Error('Failed')
-      const data = await res.json()
-      setInsight(data.text ?? 'No insights generated.')
-    } catch {
+    const result = await getAiInsights()
+    if ('text' in result) {
+      setInsight(result.text ?? 'No insights generated.')
+    } else {
       setInsight(
         'Awaiting data synchronization. Finalize active invoices to unlock deep analytics.'
       )
-    } finally {
-      setLoading(false)
     }
+    setLoading(false)
   }
 
   useEffect(() => {

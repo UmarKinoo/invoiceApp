@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { createClient } from './actions'
 
 export function AddClientForm() {
   const router = useRouter()
@@ -19,16 +20,17 @@ export function AddClientForm() {
     e.preventDefault()
     if (!form.name || !form.email) return
     setStatus('loading')
-    try {
-      const res = await fetch('/api/clients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      if (!res.ok) throw new Error('Failed to create')
+    const result = await createClient({
+      name: form.name,
+      company: form.company || undefined,
+      email: form.email,
+      phone: form.phone || undefined,
+      address: form.address || undefined,
+    })
+    if (result.doc) {
       router.push('/dashboard/clients')
       router.refresh()
-    } catch {
+    } else {
       setStatus('error')
     }
   }

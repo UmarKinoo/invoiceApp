@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatCurrency } from '@/lib/utils'
+import { searchDashboard } from '@/app/(frontend)/(admin)/dashboard/actions/search'
 import {
   CommandDialog,
   CommandEmpty,
@@ -31,16 +32,13 @@ export function SearchCommand() {
       return
     }
     setLoading(true)
-    try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=5`)
-      if (!res.ok) throw new Error('Search failed')
-      const data = await res.json()
-      setResults(data)
-    } catch {
+    const data = await searchDashboard(q, 5)
+    if ('error' in data) {
       setResults({ clients: [], invoices: [], quotes: [] })
-    } finally {
-      setLoading(false)
+    } else {
+      setResults(data as SearchResult)
     }
+    setLoading(false)
   }, [])
 
   useEffect(() => {

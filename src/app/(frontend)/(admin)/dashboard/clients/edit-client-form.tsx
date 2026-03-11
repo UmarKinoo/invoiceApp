@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import type { Client } from '@/payload-types'
+import { updateClient } from './actions'
 
 export function EditClientForm({ client }: { client: Client }) {
   const router = useRouter()
@@ -20,16 +21,17 @@ export function EditClientForm({ client }: { client: Client }) {
     e.preventDefault()
     if (!form.name || !form.email) return
     setStatus('loading')
-    try {
-      const res = await fetch(`/api/clients/${client.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      if (!res.ok) throw new Error('Failed to update')
+    const result = await updateClient(client.id, {
+      name: form.name,
+      company: form.company || undefined,
+      email: form.email,
+      phone: form.phone || undefined,
+      address: form.address || undefined,
+    })
+    if (result.doc) {
       router.push(`/dashboard/clients/${client.id}`)
       router.refresh()
-    } catch {
+    } else {
       setStatus('error')
     }
   }

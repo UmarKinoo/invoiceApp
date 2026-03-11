@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { formatCurrency } from '@/lib/utils'
-import type { Client } from '@/payload-types'
+import { getClients } from '@/app/(frontend)/(admin)/dashboard/clients/actions'
+import { createQuote, updateQuote } from '@/app/(frontend)/(admin)/dashboard/quotes/actions'
 
 type LineItem = { description: string; quantity: number; rate: number }
 
@@ -20,7 +21,7 @@ type InitialQuote = {
 
 export function QuoteForm({ initialQuote }: { initialQuote?: InitialQuote | null }) {
   const router = useRouter()
-  const [clients, setClients] = useState<Client[]>([])
+  const [clients, setClients] = useState<{ id: number; name: string | null; company: string | null; email: string | null }[]>([])
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [clientId, setClientId] = useState(initialQuote ? String(initialQuote.clientId) : '')
   const [items, setItems] = useState<LineItem[]>(
@@ -34,10 +35,7 @@ export function QuoteForm({ initialQuote }: { initialQuote?: InitialQuote | null
   )
 
   useEffect(() => {
-    fetch('/api/clients?limit=500')
-      .then((r) => r.json())
-      .then((data) => setClients(data.docs ?? []))
-      .catch(() => setClients([]))
+    getClients(500).then((res) => setClients(res.docs))
   }, [])
 
   useEffect(() => {
@@ -70,30 +68,25 @@ export function QuoteForm({ initialQuote }: { initialQuote?: InitialQuote | null
     e.preventDefault()
     if (!clientId || items.length === 0) return
     setStatus('loading')
-    try {
-      const payload = {
-        client: Number(clientId),
-        quoteNumber: initialQuote?.quoteNumber ?? `QT-${Date.now().toString().slice(-4)}`,
-        date: initialQuote?.date ?? new Date().toISOString().split('T')[0],
-        items,
-        status: initialQuote?.status ?? 'pending',
-        total,
-      }
-      const url = initialQuote ? `/api/quotes/${initialQuote.id}` : '/api/quotes'
-      const method = initialQuote ? 'PATCH' : 'POST'
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) throw new Error('Failed')
+    const payload = {
+      client: Number(clientId),
+      quoteNumber: initialQuote?.quoteNumber ?? `QT-${Date.now().toString().slice(-4)}`,
+      date: initialQuote?.date ?? new Date().toISOString().split('T')[0],
+      items,
+      status: (initialQuote?.status ?? 'pending') as string,
+      total,
+    }
+    const result = initialQuote
+      ? await updateQuote(initialQuote.id, payload)
+      : await createQuote(payload)
+    if (result.doc) {
       if (initialQuote) {
         router.push(`/dashboard/quotes/${initialQuote.id}`)
       } else {
         router.push('/dashboard/quotes')
       }
       router.refresh()
-    } catch {
+    } else {
       setStatus('error')
     }
   }

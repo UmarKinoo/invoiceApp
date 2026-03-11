@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, Building2, Receipt } from 'lucide-react'
+import { updateSettings } from './actions'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -36,17 +37,12 @@ export function SettingsForm({ initial }: { initial: Initial }) {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setStatus('saving')
-    try {
-      const res = await fetch('/api/globals/settings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      if (!res.ok) throw new Error('Failed')
+    const result = await updateSettings(form)
+    if (result.ok) {
       setStatus('saved')
       router.refresh()
       setTimeout(() => setStatus('idle'), 2000)
-    } catch {
+    } else {
       setStatus('idle')
     }
   }

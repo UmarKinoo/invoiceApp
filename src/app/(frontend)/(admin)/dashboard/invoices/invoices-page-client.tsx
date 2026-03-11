@@ -18,6 +18,10 @@ import {
   Zap,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { displayInvoiceNumber } from '@/lib/invoice-utils'
+import { createClient } from '../clients/actions'
+import { getNextInvoiceNumber, createInvoice, updateInvoice, deleteInvoice } from './actions'
+import { parseInvoicePrompt } from '../actions/ai'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,12 +32,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { LIST_PAGE_SIZE } from '@/lib/constants'
+import { ListPagination } from '@/components/dashboard/list-pagination'
 
 // Legacy Invoices layout – same as _legacy/pages/Invoices.tsx: LIST / FORM / PREVIEW on one page
 
 type LineItem = { id: string; description: string; quantity: number; rate: number }
 
-type ClientDoc = { id: string; name: string | null; company?: string | null }
+type ClientDoc = { id: string; name: string | null; company?: string | null; email?: string | null }
 type InvoiceDoc = {
   id: string
   invoiceNumber: string | null
@@ -47,6 +53,8 @@ type InvoiceDoc = {
   notes?: string | null
   total: number
   client?: { id: string; name?: string | null; company?: string | null } | string | number
+  createdAt?: string | null
+  updatedAt?: string | null
 }
 type SettingsDoc = {
   businessName: string
@@ -90,16 +98,32 @@ const defaultSettings: SettingsDoc = {
   currency: 'MUR',
 }
 
+/** Badge: show numeric part or id so we never show only "#". Handles "214", "INV-1001", "INV-1101-md2lmk". */
+function invoiceBadgeNumber(inv: { invoiceNumber?: string | null; id: string }): string {
+  const n = inv.invoiceNumber?.trim()
+  if (!n) return String(inv.id)
+  const digits = n.match(/\d+/)?.[0]
+  return digits ?? n
+}
+
 export function InvoicesPageClient({
   initialInvoices,
   initialClients,
   initialSettings,
+  initialNextInvoiceNumber,
+  totalPages = 1,
+  totalDocs: totalDocsProp = 0,
+  currentPage = 1,
   initialEditId,
   initialNewInvoice,
 }: {
   initialInvoices: InvoiceDoc[]
   initialClients: ClientDoc[]
   initialSettings: SettingsDoc | null
+  initialNextInvoiceNumber: number
+  totalPages?: number
+  totalDocs?: number
+  currentPage?: number
   initialEditId?: string
   initialNewInvoice?: boolean
 }) {
@@ -107,7 +131,13 @@ export function InvoicesPageClient({
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.LIST)
   const [invoices, setInvoices] = useState<InvoiceDoc[]>(initialInvoices)
   const [clients, setClients] = useState<ClientDoc[]>(initialClients)
+  const [nextInvoiceNumber, setNextInvoiceNumber] = useState(initialNextInvoiceNumber)
   const settings = initialSettings ?? defaultSettings
+
+  // Keep next number in sync when server data changes (e.g. after refresh)
+  useEffect(() => {
+    setNextInvoiceNumber(initialNextInvoiceNumber)
+  }, [initialNextInvoiceNumber])
 
   const [activeInvoice, setActiveInvoice] = useState<Partial<InvoiceDoc> & { clientId?: string }>({})
   const [items, setItems] = useState<LineItem[]>([])
@@ -121,12 +151,29 @@ export function InvoicesPageClient({
     company: '',
     email: '',
     phone: '',
+    brn: '',
     address: '',
   })
   const [addRecipientStatus, setAddRecipientStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [deleteInvoiceId, setDeleteInvoiceId] = useState<string | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [clientSearch, setClientSearch] = useState('')
+  const [clientPickerOpen, setClientPickerOpen] = useState(false)
   const didOpenNewRef = useRef(false)
+
+  const selectedClient = activeInvoice.clientId
+    ? clients.find((c) => String(c.id) === String(activeInvoice.clientId))
+    : null
+  const filteredClients = useMemo(() => {
+    if (!clientSearch.trim()) return clients.slice(0, 50)
+    const q = clientSearch.trim().toLowerCase()
+    return clients.filter(
+      (c) =>
+        (c.name ?? '').toLowerCase().includes(q) ||
+        (c.company ?? '').toLowerCase().includes(q) ||
+        (c.email ?? '').toLowerCase().includes(q)
+    )
+  }, [clients, clientSearch])
 
   // Filters
   const [filterStatus, setFilterStatus] = useState<string>('')
@@ -157,41 +204,49 @@ export function InvoicesPageClient({
     setActiveInvoice({ ...inv, clientId })
     const rawItems = (inv as { items?: { description?: string; quantity?: number; rate?: number }[] }).items ?? []
     setItems(
-      rawItems.map((it, i) => ({
-        id: `li-${i}-${Date.now()}`,
-        description: it.description ?? '',
-        quantity: Number(it.quantity) ?? 0,
-        rate: Number(it.rate) ?? 0,
-      }))
+      rawItems.length > 0
+        ? rawItems.map((it, i) => ({
+            id: `li-${i}-${Date.now()}`,
+            description: it.description ?? '',
+            quantity: Number(it.quantity) ?? 0,
+            rate: Number(it.rate) ?? 0,
+          }))
+        : [{ id: `new-${Date.now()}`, description: '', quantity: 1, rate: 0 }]
     )
+    setClientPickerOpen(false)
     setViewMode(ViewMode.FORM)
   }, [initialEditId, initialNewInvoice, invoices])
 
   const handleCreateRecipient = async () => {
     if (!newRecipient.name?.trim() || !newRecipient.email?.trim()) return
     setAddRecipientStatus('loading')
-    try {
-      const res = await fetch('/api/clients', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newRecipient),
-      })
-      if (!res.ok) throw new Error('Failed to create')
-      const data = await res.json()
-      const doc = data.doc ?? data
-      const created = { id: doc.id, name: doc.name ?? newRecipient.name, company: doc.company ?? newRecipient.company ?? null, email: doc.email ?? newRecipient.email }
+    const result = await createClient({
+      name: newRecipient.name,
+      company: newRecipient.company || undefined,
+      email: newRecipient.email,
+      phone: newRecipient.phone || undefined,
+      brn: newRecipient.brn || undefined,
+      address: newRecipient.address || undefined,
+    })
+    if (result.doc) {
+      const created = {
+        id: String(result.doc.id),
+        name: newRecipient.name,
+        company: newRecipient.company ?? null,
+        email: newRecipient.email,
+      }
       setClients((prev) => [...prev, created])
-      setActiveInvoice((prev) => ({ ...prev, clientId: String(doc.id) }))
+      setActiveInvoice((prev) => ({ ...prev, clientId: String(result.doc!.id) }))
       setShowAddRecipient(false)
-      setNewRecipient({ name: '', company: '', email: '', phone: '', address: '' })
-      setAddRecipientStatus('idle')
-    } catch {
-      setAddRecipientStatus('error')
+      setNewRecipient({ name: '', company: '', email: '', phone: '', brn: '', address: '' })
     }
+    setAddRecipientStatus('idle')
   }
 
   const handleCreateNew = () => {
-    const nextInvNum = `${settings.invoicePrefix}${invoices.length + 1001}`
+    // Clean sequential format: INV-1001, INV-1002 (server provides next number)
+    const nextInvNum = `${settings.invoicePrefix}${nextInvoiceNumber}`
+    setNextInvoiceNumber((n) => n + 1)
     setActiveInvoice({
       invoiceNumber: nextInvNum,
       date: new Date().toISOString().split('T')[0],
@@ -203,7 +258,16 @@ export function InvoicesPageClient({
       carNumber: '',
       notes: '',
     })
-    setItems([])
+    setItems([
+      {
+        id: `new-${Date.now()}`,
+        description: '',
+        quantity: 1,
+        rate: 0,
+      },
+    ])
+    setClientSearch('')
+    setClientPickerOpen(false)
     setViewMode(ViewMode.FORM)
   }
 
@@ -259,85 +323,66 @@ export function InvoicesPageClient({
       tax,
       total,
     }
-    try {
-      // Payload REST uses numeric id for PATCH
-      const id = activeInvoice.id
-      const url = id ? `/api/invoices/${Number(id) || id}` : '/api/invoices'
-      const method = id ? 'PATCH' : 'POST'
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) throw new Error('Failed')
-      const data = await res.json()
-      const savedId = data.doc?.id ?? data.id
-      if (savedId != null) {
-        router.push(`/dashboard/invoices/${savedId}`)
-        return
-      }
-      const updatedList = await fetch('/api/invoices?limit=100').then((r) => r.json())
-      setInvoices(updatedList.docs ?? [])
-      setViewMode(ViewMode.LIST)
-    } catch {
-      setSaveStatus('error')
-    } finally {
-      setSaveStatus('idle')
+    const id = activeInvoice.id ? Number(activeInvoice.id) : null
+    const result = id
+      ? await updateInvoice(id, payload)
+      : await createInvoice(payload)
+    if (result.doc?.id != null) {
+      router.push(`/dashboard/invoices/${result.doc.id}`)
+      return
     }
+    if (result.errors?.length) {
+      setSaveStatus('error')
+      alert(result.errors[0]?.message ?? 'Failed to save invoice.')
+    } else {
+      router.refresh()
+      setViewMode(ViewMode.LIST)
+    }
+    setSaveStatus('idle')
   }
 
   const handleDeleteInvoice = async () => {
     if (!deleteInvoiceId) return
     setDeleteLoading(true)
-    try {
-      const res = await fetch(`/api/invoices/${deleteInvoiceId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed')
+    const result = await deleteInvoice(Number(deleteInvoiceId))
+    if (result.ok) {
       setInvoices((prev) => prev.filter((i) => String(i.id) !== deleteInvoiceId))
       setDeleteInvoiceId(null)
       router.refresh()
-    } catch {
-      setDeleteLoading(false)
-    } finally {
-      setDeleteLoading(false)
     }
+    setDeleteLoading(false)
   }
 
   const handleMagicFill = async () => {
     if (!aiPrompt.trim()) return
     setIsAiLoading(true)
-    try {
-      const res = await fetch('/api/ai/parse-invoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: aiPrompt }),
-      })
-      if (!res.ok) throw new Error('Failed')
-      const data = await res.json()
-      if (data.items?.length) {
-        setItems(
-          data.items.map((it: { description?: string; quantity?: number; rate?: number }) => ({
-            id: `li-${Math.random().toString(36).slice(2, 9)}`,
-            description: it.description ?? '',
-            quantity: Number(it.quantity) ?? 0,
-            rate: Number(it.rate) ?? 0,
-          }))
-        )
-      }
-      if (data.clientName && clients.length) {
-        const found = clients.find(
-          (c) =>
-            (c.name ?? '').toLowerCase().includes(data.clientName?.toLowerCase()) ||
-            (c.company ?? '').toLowerCase().includes(data.clientName?.toLowerCase())
-        )
-        if (found) setActiveInvoice((prev) => ({ ...prev, clientId: String(found.id) }))
-      }
-      if (data.notes) setActiveInvoice((prev) => ({ ...prev, notes: data.notes }))
-    } catch {
-      // ignore
-    } finally {
+    const data = await parseInvoicePrompt(aiPrompt)
+    if ('error' in data) {
       setIsAiLoading(false)
-      setAiPrompt('')
+      return
     }
+    if (data.items?.length) {
+      setItems(
+        data.items.map((it) => ({
+          id: `li-${Math.random().toString(36).slice(2, 9)}`,
+          description: it.description ?? '',
+          quantity: Number(it.quantity) ?? 0,
+          rate: Number(it.rate) ?? 0,
+        }))
+      )
+    }
+    if (data.clientName && clients.length) {
+      const search = (data.clientName ?? '').toLowerCase()
+      const found = clients.find(
+        (c) =>
+          (c.name ?? '').toLowerCase().includes(search) ||
+          (c.company ?? '').toLowerCase().includes(search)
+      )
+      if (found) setActiveInvoice((prev) => ({ ...prev, clientId: String(found.id) }))
+    }
+    if (data.notes) setActiveInvoice((prev) => ({ ...prev, notes: data.notes }))
+    setIsAiLoading(false)
+    setAiPrompt('')
   }
 
   const getClientForInvoice = (inv: InvoiceDoc) => {
@@ -370,18 +415,15 @@ export function InvoicesPageClient({
       })
     }
     const sorted = [...list]
+    // "Newest first" = most recently created/updated, not invoice date
+    const getSortTime = (inv: InvoiceDoc) => {
+      const u = inv.updatedAt ?? inv.createdAt
+      return typeof u === 'string' ? new Date(u).getTime() : 0
+    }
     if (sortBy === 'newest') {
-      sorted.sort((a, b) => {
-        const da = typeof a.date === 'string' ? new Date(a.date).getTime() : 0
-        const db = typeof b.date === 'string' ? new Date(b.date).getTime() : 0
-        return db - da
-      })
+      sorted.sort((a, b) => getSortTime(b) - getSortTime(a))
     } else if (sortBy === 'oldest') {
-      sorted.sort((a, b) => {
-        const da = typeof a.date === 'string' ? new Date(a.date).getTime() : 0
-        const db = typeof b.date === 'string' ? new Date(b.date).getTime() : 0
-        return da - db
-      })
+      sorted.sort((a, b) => getSortTime(a) - getSortTime(b))
     } else if (sortBy === 'total-desc') {
       sorted.sort((a, b) => Number(b.total) - Number(a.total))
     } else if (sortBy === 'total-asc') {
@@ -427,7 +469,7 @@ export function InvoicesPageClient({
             </div>
             <div className="text-right">
               <h1 className="text-3xl font-black text-slate-100 uppercase tracking-tighter mb-2">Invoice</h1>
-              <p className="font-bold text-slate-900">{activeInvoice.invoiceNumber}</p>
+              <p className="font-bold text-slate-900">{displayInvoiceNumber(activeInvoice.invoiceNumber ?? null, activeInvoice.id ?? '')}</p>
               <p className="text-slate-400 text-[9px] font-black uppercase tracking-widest mt-2">
                 {activeInvoice.date}
               </p>
@@ -575,6 +617,11 @@ export function InvoicesPageClient({
                 Showing {filteredInvoices.length} of {invoices.length} invoices
               </p>
             )}
+            {!(filterStatus || filterClientId || searchQuery.trim()) && totalDocsProp > 0 && (
+              <p className="text-[10px] text-muted-foreground">
+                Showing {(currentPage - 1) * LIST_PAGE_SIZE + 1}–{Math.min(currentPage * LIST_PAGE_SIZE, totalDocsProp)} of {totalDocsProp} invoices
+              </p>
+            )}
           </div>
 
           <div className="space-y-3 px-2 lg:px-0">
@@ -593,14 +640,14 @@ export function InvoicesPageClient({
                   >
                     <div className="flex items-center space-x-4 min-w-0 flex-1">
                       <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-border bg-muted font-medium text-foreground">
-                        {inv.invoiceNumber?.split('-')[1] ?? '#'}
+                        {invoiceBadgeNumber(inv)}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-foreground">
                           {client?.name ?? 'Unknown Client'}
                         </p>
                         <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                          {inv.invoiceNumber} •{' '}
+                          {displayInvoiceNumber(inv.invoiceNumber, String(inv.id))} •{' '}
                           {typeof inv.date === 'string' ? inv.date.slice(0, 10) : ''}
                         </p>
                       </div>
@@ -676,6 +723,16 @@ export function InvoicesPageClient({
               </div>
             )}
           </div>
+          {viewMode === ViewMode.LIST && (
+            <ListPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              basePath="/dashboard/invoices"
+              preserveParams={
+                initialEditId ? { edit: initialEditId } : initialNewInvoice ? { new: '1' } : undefined
+              }
+            />
+          )}
         </>
       )}
 
@@ -694,7 +751,7 @@ export function InvoicesPageClient({
                 Draft
               </h3>
               <p className="mt-1 text-[9px] font-medium uppercase text-muted-foreground">
-                {activeInvoice.invoiceNumber}
+                {displayInvoiceNumber(activeInvoice.invoiceNumber ?? null, activeInvoice.id ?? '')}
               </p>
             </div>
             <button
@@ -737,77 +794,126 @@ export function InvoicesPageClient({
               </div>
             )}
 
-            <div className="space-y-4">
-              <section className="space-y-2">
-                <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Recipient Entity
+            <div className="space-y-5 md:space-y-6">
+              <section className="space-y-3">
+                <label className="block px-1 text-xs font-medium text-foreground sm:text-[10px] sm:uppercase sm:tracking-wider sm:text-muted-foreground">
+                  Recipient (Bill to)
                 </label>
-                <div className="relative">
-                  <select
-                    className="w-full appearance-none rounded-xl border border-input bg-background px-5 py-4 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                    value={activeInvoice.clientId ?? ''}
-                    onChange={(e) =>
-                      setActiveInvoice((prev) => ({ ...prev, clientId: e.target.value }))
-                    }
-                  >
-                    <option value="">
-                      Select client...
-                    </option>
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name ?? '—'}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-5 top-1/2 size-4 -translate-y-1/2 pointer-events-none text-muted-foreground" />
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    placeholder={selectedClient ? 'Search to change client...' : 'Search clients by name, company or email...'}
+                    value={clientSearch}
+                    onChange={(e) => {
+                      setClientSearch(e.target.value)
+                      setClientPickerOpen(true)
+                    }}
+                    onFocus={() => setClientPickerOpen(true)}
+                    className="min-h-[44px] w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring touch-manipulation"
+                  />
+                  {selectedClient && (
+                    <div className="flex min-h-[44px] items-center justify-between gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2">
+                      <span className="truncate text-sm font-medium text-foreground">
+                        {selectedClient.name ?? selectedClient.company ?? selectedClient.email ?? '—'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveInvoice((prev) => ({ ...prev, clientId: undefined }))
+                          setClientSearch('')
+                        }}
+                        className="shrink-0 rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground touch-manipulation"
+                        aria-label="Clear selection"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  )}
+                  {clientPickerOpen && (!selectedClient || clientSearch) && (
+                    <div className="max-h-[220px] overflow-y-auto rounded-xl border border-border bg-card shadow-sm">
+                      {filteredClients.length === 0 ? (
+                        <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                          No clients match. Add one below.
+                        </p>
+                      ) : (
+                        <ul className="py-1">
+                          {filteredClients.map((c) => (
+                            <li key={c.id}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveInvoice((prev) => ({ ...prev, clientId: c.id }))
+                                  setClientSearch('')
+                                  setClientPickerOpen(false)
+                                }}
+                                className="flex min-h-[44px] w-full items-center gap-2 px-4 py-3 text-left text-sm text-foreground hover:bg-muted/70 active:bg-muted touch-manipulation"
+                              >
+                                <span className="truncate font-medium">{c.name ?? '—'}</span>
+                                {c.company && (
+                                  <span className="truncate text-muted-foreground">· {c.company}</span>
+                                )}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
                 </div>
                 {!showAddRecipient ? (
                   <button
                     type="button"
                     onClick={() => setShowAddRecipient(true)}
-                    className="mt-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-primary hover:underline"
+                    className="flex min-h-[44px] items-center gap-2 text-xs font-medium text-primary hover:underline touch-manipulation"
                   >
-                    <Plus className="size-3" />
+                    <Plus className="size-4" />
                     New recipient
                   </button>
                 ) : (
-                  <div className="mt-3 space-y-3 rounded-xl border border-border bg-muted/50 p-4 animate-in slide-in-from-top-2 duration-200">
-                    <p className="px-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  <div className="mt-3 space-y-4 rounded-xl border border-border bg-muted/50 p-4 animate-in slide-in-from-top-2 duration-200">
+                    <p className="text-xs font-medium text-muted-foreground">
                       Create new connection
                     </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <input
                         placeholder="Full name"
-                        className="w-full rounded-lg border border-input bg-background px-4 py-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        className="min-h-[44px] w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring touch-manipulation"
                         value={newRecipient.name}
                         onChange={(e) => setNewRecipient((p) => ({ ...p, name: e.target.value }))}
                       />
                       <input
                         placeholder="Company"
-                        className="w-full rounded-lg border border-input bg-background px-4 py-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        className="min-h-[44px] w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring touch-manipulation"
                         value={newRecipient.company}
                         onChange={(e) => setNewRecipient((p) => ({ ...p, company: e.target.value }))}
                       />
                       <input
                         type="email"
                         placeholder="Email"
-                        className="w-full rounded-lg border border-input bg-background px-4 py-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:col-span-2"
+                        className="min-h-[44px] w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:col-span-2 touch-manipulation"
                         value={newRecipient.email}
                         onChange={(e) => setNewRecipient((p) => ({ ...p, email: e.target.value }))}
                       />
+                      <input
+                        type="text"
+                        placeholder="BRN (Business Registration No.) — optional"
+                        className="min-h-[44px] w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:col-span-2 touch-manipulation"
+                        value={newRecipient.brn}
+                        onChange={(e) => setNewRecipient((p) => ({ ...p, brn: e.target.value }))}
+                      />
                     </div>
                     {addRecipientStatus === 'error' && (
-                      <p className="text-[10px] text-destructive">Failed to save. Try again.</p>
+                      <p className="text-sm text-destructive">Failed to save. Try again.</p>
                     )}
-                    <div className="flex gap-2">
+                    <div className="flex gap-3">
                       <button
                         type="button"
                         onClick={() => {
                           setShowAddRecipient(false)
-                          setNewRecipient({ name: '', company: '', email: '', phone: '', address: '' })
+                          setNewRecipient({ name: '', company: '', email: '', phone: '', brn: '', address: '' })
                           setAddRecipientStatus('idle')
                         }}
-                        className="flex-1 rounded-xl border border-border py-2.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground"
+                        className="min-h-[44px] flex-1 rounded-xl border border-border py-3 text-sm font-medium text-muted-foreground touch-manipulation"
                       >
                         Cancel
                       </button>
@@ -815,7 +921,7 @@ export function InvoicesPageClient({
                         type="button"
                         onClick={handleCreateRecipient}
                         disabled={addRecipientStatus === 'loading' || !newRecipient.name?.trim() || !newRecipient.email?.trim()}
-                        className="flex-1 rounded-xl bg-primary py-2.5 text-[10px] font-medium uppercase tracking-wider text-primary-foreground disabled:opacity-50"
+                        className="min-h-[44px] flex-1 rounded-xl bg-primary py-3 text-sm font-medium text-primary-foreground disabled:opacity-50 touch-manipulation"
                       >
                         {addRecipientStatus === 'loading' ? 'Saving...' : 'Add & select'}
                       </button>
@@ -824,10 +930,10 @@ export function InvoicesPageClient({
                 )}
               </section>
 
-              <section className="space-y-2">
-                <div className="flex justify-between items-center px-2">
-                  <label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Ledger Items
+              <section className="space-y-3">
+                <div className="flex justify-between items-center px-1">
+                  <label className="text-xs font-medium text-foreground sm:text-[10px] sm:uppercase sm:tracking-wider sm:text-muted-foreground">
+                    Line items
                   </label>
                   <button
                     type="button"
@@ -842,21 +948,22 @@ export function InvoicesPageClient({
                         },
                       ])
                     }
-                    className="text-[9px] font-medium uppercase tracking-wider text-primary"
+                    className="min-h-[44px] rounded-xl border border-border bg-muted/50 px-4 py-2 text-xs font-medium text-primary touch-manipulation"
                   >
-                    Add Row
+                    + Add row
                   </button>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {items.map((item, idx) => (
                     <div
                       key={item.id}
-                      className="rounded-xl border border-border bg-card p-4 animate-in slide-in-from-right-4 duration-300"
+                      className="rounded-xl border-2 border-border bg-card p-4 animate-in slide-in-from-right-4 duration-300"
                     >
-                      <div className="flex justify-between items-start mb-3">
+                      <div className="mb-4 flex items-start gap-2">
+                        <label className="sr-only">Service or item description</label>
                         <input
-                          placeholder="Service Description"
-                          className="flex-1 border-none bg-transparent p-0 text-sm font-medium text-foreground placeholder:text-muted-foreground focus:ring-0"
+                          placeholder="e.g. Consulting, Design, Parts, Labour..."
+                          className="min-h-[48px] flex-1 rounded-xl border-2 border-input bg-background px-4 py-3 text-base font-medium text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-primary/50 touch-manipulation"
                           value={item.description}
                           onChange={(e) => {
                             const n = [...items]
@@ -866,18 +973,34 @@ export function InvoicesPageClient({
                         />
                         <button
                           type="button"
-                          onClick={() => setItems((p) => p.filter((i) => i.id !== item.id))}
-                          className="ml-2 text-muted-foreground hover:text-destructive"
+                          onClick={() => {
+                            if (items.length <= 1) {
+                              setItems([
+                                {
+                                  id: `new-${Date.now()}`,
+                                  description: '',
+                                  quantity: 1,
+                                  rate: 0,
+                                },
+                              ])
+                            } else {
+                              setItems((p) => p.filter((i) => i.id !== item.id))
+                            }
+                          }}
+                          className="mt-2 flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive touch-manipulation"
+                          aria-label="Remove row"
                         >
-                          <X className="size-4" />
+                          <X className="size-5" />
                         </button>
                       </div>
-                      <div className="flex space-x-4">
-                        <div className="flex-1">
-                          <p className="mb-1 text-[8px] font-medium uppercase text-muted-foreground">Quantity</p>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">Qty</p>
                           <input
                             type="number"
-                            className="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-xs text-foreground"
+                            min={0}
+                            step={0.01}
+                            className="min-h-[44px] w-full rounded-xl border border-input bg-background px-3 py-2.5 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring touch-manipulation"
                             value={item.quantity}
                             onChange={(e) => {
                               const n = [...items]
@@ -886,11 +1009,13 @@ export function InvoicesPageClient({
                             }}
                           />
                         </div>
-                        <div className="flex-1">
-                          <p className="mb-1 text-[8px] font-medium uppercase text-muted-foreground">Unit Rate</p>
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">Rate</p>
                           <input
                             type="number"
-                            className="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-xs text-foreground"
+                            min={0}
+                            step={0.01}
+                            className="min-h-[44px] w-full rounded-xl border border-input bg-background px-3 py-2.5 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring touch-manipulation"
                             value={item.rate}
                             onChange={(e) => {
                               const n = [...items]
@@ -899,58 +1024,47 @@ export function InvoicesPageClient({
                             }}
                           />
                         </div>
-                        <div className="flex-1 text-right flex flex-col justify-end">
-                          <p className="mb-1 text-[8px] font-medium uppercase text-muted-foreground">Amount</p>
-                          <p className="text-xs font-medium text-foreground">
+                        <div className="flex flex-col justify-end space-y-1 text-right">
+                          <p className="text-xs font-medium text-muted-foreground">Amount</p>
+                          <p className="font-mono text-sm font-semibold text-foreground tabular-nums">
                             {formatCurrency(item.quantity * item.rate, settings.currency)}
                           </p>
                         </div>
                       </div>
                     </div>
                   ))}
-                  {items.length === 0 && (
-                    <div className="rounded-2xl border-2 border-dashed border-border py-10 text-center text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                      No line items specified.
-                    </div>
-                  )}
                 </div>
               </section>
 
-              <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="space-y-1">
-                  <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Date
-                  </label>
+              <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-muted-foreground">Date</label>
                   <input
                     type="date"
-                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-xs text-foreground focus:ring-2 focus:ring-ring"
+                    className="min-h-[44px] w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring touch-manipulation"
                     value={activeInvoice.date ?? ''}
                     onChange={(e) =>
                       setActiveInvoice((prev) => ({ ...prev, date: e.target.value }))
                     }
                   />
                 </div>
-                <div className="space-y-1">
-                  <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Due date
-                  </label>
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-muted-foreground">Due date</label>
                   <input
                     type="date"
-                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-xs text-foreground focus:ring-2 focus:ring-ring"
+                    className="min-h-[44px] w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring touch-manipulation"
                     value={activeInvoice.dueDate ?? ''}
                     onChange={(e) =>
                       setActiveInvoice((prev) => ({ ...prev, dueDate: e.target.value }))
                     }
                   />
                 </div>
-                <div className="space-y-1 sm:col-span-2">
-                  <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Car number
-                  </label>
+                <div className="space-y-2 sm:col-span-2">
+                  <label className="block text-xs font-medium text-muted-foreground">Car / vehicle ref</label>
                   <input
                     type="text"
-                    placeholder="Vehicle / car reference"
-                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-xs text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
+                    placeholder="Optional"
+                    className="min-h-[44px] w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring touch-manipulation"
                     value={activeInvoice.carNumber ?? ''}
                     onChange={(e) =>
                       setActiveInvoice((prev) => ({ ...prev, carNumber: e.target.value }))
@@ -959,13 +1073,11 @@ export function InvoicesPageClient({
                 </div>
               </section>
 
-              <section className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Status
-                  </label>
+              <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-muted-foreground">Status</label>
                   <select
-                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-xs text-foreground focus:ring-2 focus:ring-ring"
+                    className="min-h-[44px] w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring touch-manipulation"
                     value={activeInvoice.status ?? 'draft'}
                     onChange={(e) =>
                       setActiveInvoice((prev) => ({ ...prev, status: e.target.value }))
@@ -978,13 +1090,13 @@ export function InvoicesPageClient({
                     ))}
                   </select>
                 </div>
-                <div className="space-y-1">
-                  <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Tax Rate (%)
-                  </label>
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-muted-foreground">Tax rate (%)</label>
                   <input
                     type="number"
-                    className="w-full rounded-xl border border-input bg-background px-4 py-3 text-xs text-foreground focus:ring-2 focus:ring-ring"
+                    min={0}
+                    step={0.01}
+                    className="min-h-[44px] w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring touch-manipulation"
                     value={activeInvoice.taxRate ?? 0}
                     onChange={(e) =>
                       setActiveInvoice((prev) => ({
@@ -996,13 +1108,11 @@ export function InvoicesPageClient({
                 </div>
               </section>
 
-              <section className="space-y-1">
-                <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Terms & Notes
-                </label>
+              <section className="space-y-2">
+                <label className="block text-xs font-medium text-muted-foreground">Terms & notes</label>
                 <textarea
-                  className="h-24 w-full rounded-xl border border-input bg-background px-5 py-4 text-xs text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring"
-                  placeholder="Payment instructions, bank details, etc..."
+                  className="min-h-[88px] w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring touch-manipulation"
+                  placeholder="Payment instructions, bank details, etc."
                   value={activeInvoice.notes ?? ''}
                   onChange={(e) =>
                     setActiveInvoice((prev) => ({ ...prev, notes: e.target.value }))
