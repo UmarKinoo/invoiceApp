@@ -1,10 +1,7 @@
 import { getPayloadClient } from '@/lib/payload-server'
 
-/**
- * Ping endpoint for Vercel Cron. Runs a tiny DB query so Supabase (free tier) stays active.
- * Uses the same DATABASE_URI as the app; no extra env vars needed.
- * Vercel cron: vercel.json has "0 */6 * * *" (every 6 hours).
- */
+// Ping for Vercel Cron: tiny DB query so Supabase (free tier) stays active.
+// Uses DATABASE_URI; schedule in vercel.json (e.g. every 6 hours).
 export const dynamic = 'force-dynamic'
 export const maxDuration = 10
 
