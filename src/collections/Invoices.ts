@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 import { lineItemFields } from './LineItem'
 import { createActivityLog } from './hooks/createActivityLog'
+import { createPaymentTransactionWhenPaid } from './hooks/createPaymentTransactionWhenPaid'
 
 function getClientId(client: number | { id: number } | undefined): number | null {
   if (client == null) return null
@@ -50,6 +51,11 @@ export const Invoices: CollectionConfig = {
           })
         }
       },
+      ({ doc, previousDoc, operation, req }) => {
+        if (!req.payload || operation !== 'update' || !previousDoc) return
+        if (previousDoc.status === 'paid' || doc.status !== 'paid') return
+        createPaymentTransactionWhenPaid(req.payload, doc).catch(() => {})
+      },
     ],
   },
   admin: {
@@ -87,6 +93,7 @@ export const Invoices: CollectionConfig = {
       options: [
         { label: 'Draft', value: 'draft' },
         { label: 'Sent', value: 'sent' },
+        { label: 'Partial', value: 'partial' },
         { label: 'Paid', value: 'paid' },
         { label: 'Overdue', value: 'overdue' },
         { label: 'Cancelled', value: 'cancelled' },

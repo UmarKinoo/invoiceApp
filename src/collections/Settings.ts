@@ -12,7 +12,21 @@ export const Settings: GlobalConfig = {
     { name: 'businessEmail', type: 'email', defaultValue: '' },
     { name: 'businessPhone', type: 'text', defaultValue: '' },
     { name: 'businessWebsite', type: 'text', defaultValue: '' },
-    { name: 'logoUrl', type: 'text', admin: { description: 'URL or leave empty for placeholder' } },
+    {
+      name: 'logo',
+      type: 'upload',
+      relationTo: 'media',
+      admin: { description: 'Logo used on invoices (PNG recommended)' },
+    },
+    { name: 'logoUrl', type: 'text', admin: { description: 'Fallback URL if no logo uploaded' } },
+    {
+      name: 'logoWhite',
+      type: 'upload',
+      relationTo: 'media',
+      admin: { description: 'Logo for white background (e.g. PDF, print). Uses main logo if not set.' },
+    },
+    { name: 'businessBrn', type: 'text', admin: { description: 'Business Registration Number (e.g. BRN)' } },
+    { name: 'vatRegistrationNumber', type: 'text', admin: { description: 'VAT registration number' } },
     { name: 'invoicePrefix', type: 'text', defaultValue: 'INV-' },
     { name: 'taxRateDefault', type: 'number', defaultValue: 0, admin: { description: 'Default tax %' } },
     {

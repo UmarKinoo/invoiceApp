@@ -71,7 +71,7 @@ const StatCard: React.FC<{
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {label}
         </p>
-        <p className="min-h-[2rem] font-mono text-xl font-semibold tabular-nums tracking-tight text-foreground sm:text-2xl lg:text-[27px]">
+        <p className="min-h-[2rem] font-mono text-base font-semibold tabular-nums tracking-tight text-foreground sm:text-lg lg:text-[22px]">
           {value}
         </p>
       </div>
@@ -83,10 +83,12 @@ export function DashboardPageClient({
   user,
   invoices,
   clients,
+  ledgerStats,
 }: {
   user: User | null
   invoices: InvoiceDoc[]
   clients: ClientDoc[]
+  ledgerStats?: { revenue: number; outstanding: number }
 }) {
   const router = useRouter()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -94,10 +96,10 @@ export function DashboardPageClient({
   const isMobile = useIsMobile()
 
   const stats = useMemo(() => {
-    const paid = invoices
+    const paid = ledgerStats?.revenue ?? invoices
       .filter((i) => i.status === 'paid')
       .reduce((acc, curr) => acc + (Number(curr.total) || 0), 0)
-    const outstanding = invoices
+    const outstanding = ledgerStats?.outstanding ?? invoices
       .filter((i) => i.status !== 'paid' && i.status !== 'cancelled')
       .reduce((acc, curr) => acc + (Number(curr.total) || 0), 0)
     return {
@@ -106,7 +108,7 @@ export function DashboardPageClient({
       clients: clients.length,
       count: invoices.length,
     }
-  }, [invoices, clients])
+  }, [invoices, clients, ledgerStats])
 
   const chartData = useMemo(() => {
     const now = new Date()

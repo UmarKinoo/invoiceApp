@@ -78,10 +78,25 @@ Transaction:
 
 ---
 
-## Files to modify
+## Implementation (done)
 
-- `src/collections/Transactions.ts` – new schema
-- `src/collections/Invoices.ts` – add hooks for auto-transaction creation
-- `src/app/(frontend)/(admin)/dashboard/transactions/` – rebuild UI
-- `src/app/(frontend)/(admin)/dashboard/dashboard-page-client.tsx` – stats from ledger
-- `src/app/(frontend)/(admin)/dashboard/invoices/` – show payment history per invoice
+- **Transactions** – Added `type` (income | expense), `invoice` (relation), `notes`, method `check`. Hook updates linked invoice status when payments are added/removed.
+- **Invoices** – Added status `partial`. When an invoice is marked **Paid**, a transaction is auto-created for the remaining balance (total − sum of linked payments).
+- **Ledger page** (`/dashboard/transactions`) – Rebuilt with: summary cards (Revenue, Expenses, Outstanding, Net P&L); tabs **All** / **By invoice** (reconciliation) / **Unmatched**; “Log transaction” supports Income/Expense and optional invoice link.
+- **Dashboard** – Cash Flow and Capital Out now use ledger data (revenue = sum income tx, outstanding = sum of unpaid balances).
+- **Invoice UI** – Status options include **Partial**.
+
+### Database migration
+
+After pulling, add the new columns on `transactions`: run `pnpm payload migrate:create` then `pnpm payload migrate`, or use schema push in dev. On production, run the same migration against the prod DB. Existing transaction rows get `type = 'income'` from the default.
+
+## Files modified
+
+- `src/collections/Transactions.ts` – new schema + hooks
+- `src/collections/Invoices.ts` – partial status, hook to create tx when marked paid
+- `src/collections/hooks/updateInvoiceStatusFromPayments.ts` – new
+- `src/collections/hooks/createPaymentTransactionWhenPaid.ts` – new
+- `src/app/(frontend)/(admin)/dashboard/transactions/` – Ledger page + form
+- `src/app/(frontend)/(admin)/dashboard/dashboard-page-client.tsx` – ledger stats
+- `src/app/(frontend)/(admin)/dashboard/page.tsx` – fetch transactions, compute revenue/outstanding
+- `src/app/(frontend)/(admin)/dashboard/invoices/` – Partial status in filters and form

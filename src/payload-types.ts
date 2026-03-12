@@ -171,6 +171,9 @@ export interface User {
  */
 export interface Media {
   id: number;
+  /**
+   * Short description for accessibility
+   */
   alt: string;
   updatedAt: string;
   createdAt: string;
@@ -234,7 +237,7 @@ export interface Invoice {
     rate: number;
     id?: string | null;
   }[];
-  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+  status: 'draft' | 'sent' | 'partial' | 'paid' | 'overdue' | 'cancelled';
   /**
    * Percent
    */
@@ -295,14 +298,29 @@ export interface Task {
  */
 export interface Transaction {
   id: number;
+  /**
+   * Income = money in; Expense = money out
+   */
+  type: 'income' | 'expense';
   date: string;
   amount: number;
+  /**
+   * Link to invoice when this payment is for an invoice
+   */
+  invoice?: (number | null) | Invoice;
+  /**
+   * Contact (for income) or vendor/payee (for expense)
+   */
   client: number | Client;
   /**
-   * e.g. invoice number
+   * e.g. PAY-001 or invoice number
    */
   reference?: string | null;
-  method?: ('stripe' | 'paypal' | 'bank_transfer' | 'cash') | null;
+  method?: ('stripe' | 'paypal' | 'bank_transfer' | 'cash' | 'check') | null;
+  /**
+   * Optional notes
+   */
+  notes?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -595,11 +613,14 @@ export interface TasksSelect<T extends boolean = true> {
  * via the `definition` "transactions_select".
  */
 export interface TransactionsSelect<T extends boolean = true> {
+  type?: T;
   date?: T;
   amount?: T;
+  invoice?: T;
   client?: T;
   reference?: T;
   method?: T;
+  notes?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -670,9 +691,25 @@ export interface Setting {
   businessPhone?: string | null;
   businessWebsite?: string | null;
   /**
-   * URL or leave empty for placeholder
+   * Logo used on invoices (PNG recommended)
+   */
+  logo?: (number | null) | Media;
+  /**
+   * Fallback URL if no logo uploaded
    */
   logoUrl?: string | null;
+  /**
+   * Logo for white background (e.g. PDF, print). Uses main logo if not set.
+   */
+  logoWhite?: (number | null) | Media;
+  /**
+   * Business Registration Number (e.g. BRN)
+   */
+  businessBrn?: string | null;
+  /**
+   * VAT registration number
+   */
+  vatRegistrationNumber?: string | null;
   invoicePrefix?: string | null;
   /**
    * Default tax %
@@ -692,7 +729,11 @@ export interface SettingsSelect<T extends boolean = true> {
   businessEmail?: T;
   businessPhone?: T;
   businessWebsite?: T;
+  logo?: T;
   logoUrl?: T;
+  logoWhite?: T;
+  businessBrn?: T;
+  vatRegistrationNumber?: T;
   invoicePrefix?: T;
   taxRateDefault?: T;
   currency?: T;

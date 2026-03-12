@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Building2, Receipt } from 'lucide-react'
+import { Loader2, Building2, Receipt, Upload, ImageIcon } from 'lucide-react'
 import { updateSettings } from './actions'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -24,6 +24,10 @@ type Initial = {
   businessPhone: string
   businessWebsite: string
   logoUrl: string
+  logo: { url: string; id: number } | null
+  logoWhite: { url: string; id: number } | null
+  businessBrn: string
+  vatRegistrationNumber: string
   invoicePrefix: string
   taxRateDefault: number
   currency: string
@@ -31,13 +35,109 @@ type Initial = {
 
 export function SettingsForm({ initial }: { initial: Initial }) {
   const router = useRouter()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const fileWhiteInputRef = useRef<HTMLInputElement>(null)
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoWhiteUploading, setLogoWhiteUploading] = useState(false)
   const [form, setForm] = useState(initial)
+  const logoDisplayUrl = form.logo?.url || form.logoUrl || null
+  const logoWhiteDisplayUrl = form.logoWhite?.url || null
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLogoUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('alt', 'Company logo')
+      const res = await fetch('/api/media', {
+        method: 'POST',
+        credentials: 'include',
+        body: fd,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err?.errors?.[0]?.message ?? err?.message ?? 'Upload failed')
+      }
+      const data = await res.json()
+      const doc = data?.doc ?? data
+      const id = doc?.id
+      if (id == null) throw new Error('No media id returned')
+      const { logo: _logo, logoWhite: _logoWhite, ...rest } = form
+      await updateSettings({
+        ...rest,
+        logo: Number(id),
+        logoWhite: _logoWhite?.id ?? undefined,
+      })
+      setForm((p) => ({
+        ...p,
+        logo: { url: doc?.url ?? logoDisplayUrl ?? '', id: Number(id) },
+        logoUrl: doc?.url ?? p.logoUrl,
+      }))
+      router.refresh()
+    } catch (err) {
+      console.error('Logo upload failed:', err)
+      setStatus('idle')
+    } finally {
+      setLogoUploading(false)
+      e.target.value = ''
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleLogoWhiteUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLogoWhiteUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('alt', 'Company logo (white background)')
+      const res = await fetch('/api/media', {
+        method: 'POST',
+        credentials: 'include',
+        body: fd,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err?.errors?.[0]?.message ?? err?.message ?? 'Upload failed')
+      }
+      const data = await res.json()
+      const doc = data?.doc ?? data
+      const id = doc?.id
+      if (id == null) throw new Error('No media id returned')
+      const { logo: _logo, logoWhite: _logoWhite, ...rest } = form
+      await updateSettings({
+        ...rest,
+        logo: _logo?.id ?? undefined,
+        logoWhite: Number(id),
+      })
+      setForm((p) => ({
+        ...p,
+        logoWhite: { url: doc?.url ?? '', id: Number(id) },
+      }))
+      router.refresh()
+    } catch (err) {
+      console.error('Logo (white) upload failed:', err)
+      setStatus('idle')
+    } finally {
+      setLogoWhiteUploading(false)
+      e.target.value = ''
+      if (fileWhiteInputRef.current) fileWhiteInputRef.current.value = ''
+    }
+  }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setStatus('saving')
-    const result = await updateSettings(form)
+    const payload = {
+      ...form,
+      logo: form.logo?.id ?? undefined,
+      logoWhite: form.logoWhite?.id ?? undefined,
+    }
+    const result = await updateSettings(payload)
     if (result.ok) {
       setStatus('saved')
       router.refresh()
@@ -115,17 +215,107 @@ export function SettingsForm({ initial }: { initial: Initial }) {
             />
           </div>
           <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="logoUrl">Logo URL</Label>
+            <Label>Logo</Label>
+            <div className="flex flex-wrap items-center gap-4">
+              {logoDisplayUrl ? (
+                <div className="flex h-16 w-40 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/50">
+                  <img src={logoDisplayUrl} alt="Company logo" className="max-h-14 max-w-full object-contain" />
+                </div>
+              ) : (
+                <div className="flex h-16 w-40 items-center justify-center rounded-lg border border-dashed border-border bg-muted/30">
+                  <ImageIcon className="size-8 text-muted-foreground" />
+                </div>
+              )}
+              <div className="flex flex-col gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={handleLogoUpload}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={logoUploading}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="gap-2"
+                >
+                  {logoUploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                  {logoUploading ? 'Uploading…' : 'Upload logo'}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  PNG or JPG. Used on screen and dark backgrounds.
+                </p>
+              </div>
+            </div>
+            <div className="mt-2">
+              <Label htmlFor="logoUrl" className="text-xs text-muted-foreground">Or logo URL (fallback)</Label>
+              <Input
+                id="logoUrl"
+                type="url"
+                value={form.logoUrl}
+                onChange={(e) => setForm((p) => ({ ...p, logoUrl: e.target.value }))}
+                placeholder="https://..."
+                className="mt-1"
+              />
+            </div>
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <Label>Logo for white background</Label>
+            <div className="flex flex-wrap items-center gap-4">
+              {logoWhiteDisplayUrl ? (
+                <div className="flex h-16 w-40 items-center justify-center overflow-hidden rounded-lg border border-border bg-white">
+                  <img src={logoWhiteDisplayUrl} alt="Logo for white background" className="max-h-14 max-w-full object-contain" />
+                </div>
+              ) : (
+                <div className="flex h-16 w-40 items-center justify-center rounded-lg border border-dashed border-border bg-muted/30">
+                  <ImageIcon className="size-8 text-muted-foreground" />
+                </div>
+              )}
+              <div className="flex flex-col gap-2">
+                <input
+                  ref={fileWhiteInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={handleLogoWhiteUpload}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={logoWhiteUploading}
+                  onClick={() => fileWhiteInputRef.current?.click()}
+                  className="gap-2"
+                >
+                  {logoWhiteUploading ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                  {logoWhiteUploading ? 'Uploading…' : 'Upload logo (white bg)'}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Used on PDF and print. Falls back to main logo if not set.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="businessBrn">BRN (Business Registration No.)</Label>
             <Input
-              id="logoUrl"
-              type="url"
-              value={form.logoUrl}
-              onChange={(e) => setForm((p) => ({ ...p, logoUrl: e.target.value }))}
-              placeholder="https://..."
+              id="businessBrn"
+              value={form.businessBrn}
+              onChange={(e) => setForm((p) => ({ ...p, businessBrn: e.target.value }))}
+              placeholder="e.g. C13117289"
             />
-            <p className="text-xs text-muted-foreground">
-              Optional. Used on exported invoices and PDFs.
-            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="vatRegistrationNumber">VAT registration number</Label>
+            <Input
+              id="vatRegistrationNumber"
+              value={form.vatRegistrationNumber}
+              onChange={(e) => setForm((p) => ({ ...p, vatRegistrationNumber: e.target.value }))}
+              placeholder="e.g. VAT27229699"
+            />
           </div>
         </CardContent>
       </Card>

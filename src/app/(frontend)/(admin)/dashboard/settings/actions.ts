@@ -10,6 +10,10 @@ export type SettingsUpdate = {
   businessPhone?: string
   businessWebsite?: string
   logoUrl?: string
+  logo?: number | null
+  logoWhite?: number | null
+  businessBrn?: string
+  vatRegistrationNumber?: string
   invoicePrefix?: string
   taxRateDefault?: number
   currency?: string

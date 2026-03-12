@@ -106,3 +106,49 @@ export async function deleteInvoice(id: number): Promise<{ ok?: true; error?: st
     return { error: 'Failed to delete invoice' }
   }
 }
+
+const VALID_STATUSES = ['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled'] as const
+
+const LOG = (msg: string, ...args: unknown[]) => {
+  console.error(`[BulkStatus] ${msg}`, ...args)
+}
+
+type InvoiceStatus = (typeof VALID_STATUSES)[number]
+
+export async function bulkUpdateInvoiceStatus(
+  ids: number[],
+  status: string
+): Promise<{ updated?: number; error?: string }> {
+  LOG('start', { ids, status })
+  if (ids.length === 0) {
+    LOG('early return: no ids')
+    return { updated: 0 }
+  }
+  if (!VALID_STATUSES.includes(status as InvoiceStatus)) {
+    LOG('invalid status', status)
+    return { error: 'Invalid status' }
+  }
+  const statusVal = status as InvoiceStatus
+  try {
+    LOG('getPayloadClient...')
+    const payload = await getPayloadClient()
+    LOG('getPayloadClient done')
+    let updated = 0
+    for (const id of ids) {
+      LOG('payload.update id=%s status=%s', id, status)
+      await payload.update({ collection: 'invoices', id, data: { status: statusVal } })
+      updated += 1
+      LOG('payload.update done for id=%s', id)
+    }
+    LOG('revalidatePath...')
+    revalidatePath('/dashboard/invoices')
+    revalidatePath('/dashboard')
+    revalidatePath('/dashboard/transactions')
+    LOG('success', { updated })
+    return { updated }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e)
+    LOG('error', message, e)
+    return { error: message }
+  }
+}

@@ -16,11 +16,12 @@ import {
   Sparkles,
   X,
   Zap,
+  AlertCircle,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { displayInvoiceNumber } from '@/lib/invoice-utils'
 import { createClient } from '../clients/actions'
-import { getNextInvoiceNumber, createInvoice, updateInvoice, deleteInvoice } from './actions'
+import { getNextInvoiceNumber, createInvoice, updateInvoice, deleteInvoice, bulkUpdateInvoiceStatus } from './actions'
 import { parseInvoicePrompt } from '../actions/ai'
 import {
   AlertDialog,
@@ -32,6 +33,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { LIST_PAGE_SIZE } from '@/lib/constants'
 import { ListPagination } from '@/components/dashboard/list-pagination'
 
@@ -68,6 +80,7 @@ type SettingsDoc = {
 
 const STATUS_STYLE: Record<string, string> = {
   paid: 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5',
+  partial: 'text-blue-400 border-blue-500/20 bg-blue-500/5',
   overdue: 'text-rose-400 border-rose-500/20 bg-rose-500/5',
   draft: 'text-amber-400 border-amber-500/20 bg-amber-500/5',
   sent: 'text-amber-400 border-amber-500/20 bg-amber-500/5',
@@ -76,6 +89,7 @@ const STATUS_STYLE: Record<string, string> = {
 
 const STATUS_LABELS: Record<string, string> = {
   paid: 'Paid',
+  partial: 'Partial',
   overdue: 'Overdue',
   draft: 'Draft',
   sent: 'Sent',
@@ -98,6 +112,47 @@ const defaultSettings: SettingsDoc = {
   currency: 'MUR',
 }
 
+const DRAFT_KEY = 'invoiceApp_invoice_draft'
+
+function loadInvoiceDraft(): { activeInvoice: Partial<InvoiceDoc> & { clientId?: string }; items: LineItem[] } | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { activeInvoice?: unknown; items?: LineItem[] }
+    if (parsed?.activeInvoice && Array.isArray(parsed.items) && parsed.items.length > 0) {
+      return {
+        activeInvoice: parsed.activeInvoice as Partial<InvoiceDoc> & { clientId?: string },
+        items: parsed.items,
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return null
+}
+
+function saveInvoiceDraft(activeInvoice: Partial<InvoiceDoc> & { clientId?: string }, items: LineItem[]) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem(
+      DRAFT_KEY,
+      JSON.stringify({ activeInvoice, items, savedAt: Date.now() })
+    )
+  } catch {
+    // ignore
+  }
+}
+
+function clearInvoiceDraft() {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.removeItem(DRAFT_KEY)
+  } catch {
+    // ignore
+  }
+}
+
 /** Badge: show numeric part or id so we never show only "#". Handles "214", "INV-1001", "INV-1101-md2lmk". */
 function invoiceBadgeNumber(inv: { invoiceNumber?: string | null; id: string }): string {
   const n = inv.invoiceNumber?.trim()
@@ -114,6 +169,7 @@ export function InvoicesPageClient({
   totalPages = 1,
   totalDocs: totalDocsProp = 0,
   currentPage = 1,
+  initialSortBy = 'newest',
   initialEditId,
   initialNewInvoice,
 }: {
@@ -124,6 +180,7 @@ export function InvoicesPageClient({
   totalPages?: number
   totalDocs?: number
   currentPage?: number
+  initialSortBy?: 'newest' | 'oldest' | 'total-desc' | 'total-asc'
   initialEditId?: string
   initialNewInvoice?: boolean
 }) {
@@ -144,6 +201,7 @@ export function InvoicesPageClient({
   const [isAiLoading, setIsAiLoading] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
   const [saveStatus, setSaveStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [formError, setFormError] = useState<string | null>(null)
 
   const [showAddRecipient, setShowAddRecipient] = useState(false)
   const [newRecipient, setNewRecipient] = useState({
@@ -175,11 +233,29 @@ export function InvoicesPageClient({
     )
   }, [clients, clientSearch])
 
-  // Filters
+  // Filters (sort is server-side via URL; sync from initialSortBy)
   const [filterStatus, setFilterStatus] = useState<string>('')
   const [filterClientId, setFilterClientId] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState('')
-  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'total-desc' | 'total-asc'>('newest')
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'total-desc' | 'total-asc'>(initialSortBy)
+  useEffect(() => {
+    setSortBy(initialSortBy)
+  }, [initialSortBy])
+
+  // Persist new-invoice draft to localStorage (debounced)
+  useEffect(() => {
+    if (viewMode !== ViewMode.FORM || activeInvoice.id) return
+    const t = setTimeout(() => {
+      saveInvoiceDraft(activeInvoice, items)
+    }, 500)
+    return () => clearTimeout(t)
+  }, [viewMode, activeInvoice, items])
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [bulkStatusKey, setBulkStatusKey] = useState(0)
+  const bulkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     setInvoices(initialInvoices)
@@ -190,6 +266,11 @@ export function InvoicesPageClient({
   }, [initialClients])
 
   useEffect(() => {
+    if (!initialNewInvoice && !initialEditId) {
+      setViewMode(ViewMode.LIST)
+      didOpenNewRef.current = false
+      return
+    }
     if (initialNewInvoice && !didOpenNewRef.current) {
       didOpenNewRef.current = true
       handleCreateNew()
@@ -214,6 +295,7 @@ export function InvoicesPageClient({
         : [{ id: `new-${Date.now()}`, description: '', quantity: 1, rate: 0 }]
     )
     setClientPickerOpen(false)
+    setFormError(null)
     setViewMode(ViewMode.FORM)
   }, [initialEditId, initialNewInvoice, invoices])
 
@@ -244,7 +326,16 @@ export function InvoicesPageClient({
   }
 
   const handleCreateNew = () => {
-    // Clean sequential format: INV-1001, INV-1002 (server provides next number)
+    setFormError(null)
+    const draft = loadInvoiceDraft()
+    if (draft) {
+      setActiveInvoice(draft.activeInvoice)
+      setItems(draft.items)
+      setClientSearch('')
+      setClientPickerOpen(false)
+      setViewMode(ViewMode.FORM)
+      return
+    }
     const nextInvNum = `${settings.invoicePrefix}${nextInvoiceNumber}`
     setNextInvoiceNumber((n) => n + 1)
     setActiveInvoice({
@@ -252,7 +343,7 @@ export function InvoicesPageClient({
       date: new Date().toISOString().split('T')[0],
       dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       status: 'draft',
-      taxRate: settings.taxRateDefault,
+      taxRate: 15,
       discount: 0,
       shipping: 0,
       carNumber: '',
@@ -292,7 +383,7 @@ export function InvoicesPageClient({
     const subtotal = items.reduce((acc, curr) => acc + curr.quantity * curr.rate, 0)
     const discount = activeInvoice.discount ?? 0
     const afterDiscount = subtotal - discount
-    const tax = (afterDiscount * (activeInvoice.taxRate ?? 0)) / 100
+    const tax = (afterDiscount * (activeInvoice.taxRate ?? 15)) / 100
     const total = afterDiscount + tax + (activeInvoice.shipping ?? 0)
     return { subtotal, tax, total }
   }, [items, activeInvoice.taxRate, activeInvoice.discount, activeInvoice.shipping])
@@ -300,12 +391,13 @@ export function InvoicesPageClient({
   const saveInvoice = async () => {
     const clientId = activeInvoice.clientId
     if (!clientId || items.length === 0) {
-      alert('Please select a recipient and add items.')
+      setFormError('Please select a recipient and add at least one line item.')
       return
     }
+    setFormError(null)
     setSaveStatus('loading')
     const subtotal = items.reduce((acc, curr) => acc + curr.quantity * curr.rate, 0)
-    const tax = (subtotal * (activeInvoice.taxRate ?? 0)) / 100
+    const tax = (subtotal * (activeInvoice.taxRate ?? 15)) / 100
     const total = subtotal + tax
     const payload = {
       client: Number(clientId),
@@ -314,7 +406,7 @@ export function InvoicesPageClient({
       dueDate: activeInvoice.dueDate ?? new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       items: items.map(({ id: _id, ...rest }) => rest),
       status: activeInvoice.status ?? 'draft',
-      taxRate: activeInvoice.taxRate ?? 0,
+      taxRate: 15,
       discount: activeInvoice.discount ?? 0,
       shipping: activeInvoice.shipping ?? 0,
       carNumber: activeInvoice.carNumber ?? '',
@@ -328,13 +420,17 @@ export function InvoicesPageClient({
       ? await updateInvoice(id, payload)
       : await createInvoice(payload)
     if (result.doc?.id != null) {
+      setFormError(null)
+      clearInvoiceDraft()
       router.push(`/dashboard/invoices/${result.doc.id}`)
       return
     }
     if (result.errors?.length) {
       setSaveStatus('error')
-      alert(result.errors[0]?.message ?? 'Failed to save invoice.')
+      setFormError(result.errors[0]?.message ?? 'Failed to save invoice.')
     } else {
+      setFormError(null)
+      clearInvoiceDraft()
       router.refresh()
       setViewMode(ViewMode.LIST)
     }
@@ -414,23 +510,8 @@ export function InvoicesPageClient({
         return invNum.includes(q) || clientName.includes(q) || company.includes(q)
       })
     }
-    const sorted = [...list]
-    // "Newest first" = most recently created/updated, not invoice date
-    const getSortTime = (inv: InvoiceDoc) => {
-      const u = inv.updatedAt ?? inv.createdAt
-      return typeof u === 'string' ? new Date(u).getTime() : 0
-    }
-    if (sortBy === 'newest') {
-      sorted.sort((a, b) => getSortTime(b) - getSortTime(a))
-    } else if (sortBy === 'oldest') {
-      sorted.sort((a, b) => getSortTime(a) - getSortTime(b))
-    } else if (sortBy === 'total-desc') {
-      sorted.sort((a, b) => Number(b.total) - Number(a.total))
-    } else if (sortBy === 'total-asc') {
-      sorted.sort((a, b) => Number(a.total) - Number(b.total))
-    }
-    return sorted
-  }, [invoices, clients, filterStatus, filterClientId, searchQuery, sortBy])
+    return list
+  }, [invoices, clients, filterStatus, filterClientId, searchQuery])
 
   const previewClient = activeInvoice.clientId
     ? clients.find((c) => String(c.id) === String(activeInvoice.clientId))
@@ -461,7 +542,7 @@ export function InvoicesPageClient({
         <div className="max-w-3xl mx-auto bg-white rounded-2xl p-8 md:p-12 text-slate-900 shadow-2xl print:shadow-none print:p-0">
           <div className="flex justify-between items-start mb-10">
             <div>
-              <img src={settings.logoUrl ?? ''} className="h-12 mb-4" alt="Logo" />
+              <img src={settings.logoUrl ?? ''} className="h-12 mb-4" alt="Company logo" />
               <h2 className="text-xl font-black">{settings.businessName}</h2>
               <div className="text-slate-500 text-[10px] mt-1 font-medium leading-relaxed">
                 <p>{settings.businessAddress}</p>
@@ -570,7 +651,7 @@ export function InvoicesPageClient({
                 className="h-9 rounded-lg border border-input bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="">All statuses</option>
-                {(['draft', 'sent', 'paid', 'overdue', 'cancelled'] as const).map((s) => (
+                {(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled'] as const).map((s) => (
                   <option key={s} value={s}>
                     {STATUS_LABELS[s]}
                   </option>
@@ -590,7 +671,17 @@ export function InvoicesPageClient({
               </select>
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                onChange={(e) => {
+                  const value = e.target.value as typeof sortBy
+                  setSortBy(value)
+                  const params = new URLSearchParams()
+                  if (value !== 'newest') params.set('sort', value)
+                  params.set('page', '1')
+                  if (initialEditId) params.set('edit', initialEditId)
+                  if (initialNewInvoice) params.set('new', '1')
+                  const q = params.toString()
+                  router.push(q ? `/dashboard/invoices?${q}` : '/dashboard/invoices')
+                }}
                 className="h-9 rounded-lg border border-input bg-background px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="newest">Newest first</option>
@@ -624,21 +715,151 @@ export function InvoicesPageClient({
             )}
           </div>
 
+          {/* Bulk actions bar */}
+          {selectedIds.size > 0 && (
+            <div className="px-2 lg:px-0 mb-3">
+              <Card className="rounded-2xl border border-border bg-card py-0 shadow-sm">
+                <CardContent className="flex flex-wrap items-center gap-4 px-6 py-4">
+                  <span className="text-sm font-medium text-foreground">
+                    {selectedIds.size} selected
+                  </span>
+                  <Select
+                    key={bulkStatusKey}
+                    disabled={bulkLoading}
+                    onValueChange={async (status) => {
+                      if (!status || bulkLoading) return
+                      const ids = Array.from(selectedIds).map(Number)
+                      console.log('[BulkStatus] client: start', { ids, status })
+                      setBulkLoading(true)
+                      if (bulkTimeoutRef.current) clearTimeout(bulkTimeoutRef.current)
+                      bulkTimeoutRef.current = setTimeout(() => {
+                        console.log('[BulkStatus] client: timeout')
+                        setBulkLoading(false)
+                        bulkTimeoutRef.current = null
+                        alert('Update is taking too long. Please refresh the page.')
+                      }, 15000)
+                      try {
+                        const result = await bulkUpdateInvoiceStatus(ids, status)
+                        console.log('[BulkStatus] client: result', result)
+                        if (result.updated != null) {
+                          setSelectedIds(new Set())
+                          setBulkStatusKey((k) => k + 1)
+                          router.refresh()
+                        } else if (result.error) {
+                          console.error('[BulkStatus] client: error from server', result.error)
+                          alert(result.error)
+                        }
+                      } catch (e) {
+                        console.error('[BulkStatus] client: catch', e)
+                        alert(e instanceof Error ? e.message : 'Update failed')
+                      } finally {
+                        if (bulkTimeoutRef.current) {
+                          clearTimeout(bulkTimeoutRef.current)
+                          bulkTimeoutRef.current = null
+                        }
+                        setBulkLoading(false)
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-9 w-[180px] rounded-lg border border-input bg-background text-xs font-medium">
+                      <SelectValue placeholder="Change status to…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled'] as const).map((s) => (
+                        <SelectItem key={s} value={s} className="text-sm">
+                          {STATUS_LABELS[s]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={bulkLoading}
+                    className="h-9 text-xs font-medium"
+                    onClick={() => setSelectedIds(new Set())}
+                  >
+                    Clear selection
+                  </Button>
+                  {bulkLoading && (
+                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Updating…
+                    </span>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           <div className="space-y-3 px-2 lg:px-0">
             {filteredInvoices.length > 0 ? (
-              filteredInvoices.map((inv) => {
+              <>
+                {/* Select all on page — only when at least one is selected */}
+                {selectedIds.size > 0 && (
+                  <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-5 py-3 lg:px-6 lg:py-3">
+                    <Checkbox
+                      id="select-all-invoices"
+                      className="shrink-0"
+                      checked={
+                        filteredInvoices.length > 0 &&
+                        filteredInvoices.every((inv) => selectedIds.has(String(inv.id)))
+                      }
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev)
+                            filteredInvoices.forEach((inv) => next.add(String(inv.id)))
+                            return next
+                          })
+                        } else {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev)
+                            filteredInvoices.forEach((inv) => next.delete(String(inv.id)))
+                            return next
+                          })
+                        }
+                      }}
+                    />
+                    <label
+                      htmlFor="select-all-invoices"
+                      className="text-sm font-medium text-muted-foreground cursor-pointer select-none"
+                    >
+                      Select all on page
+                    </label>
+                  </div>
+                )}
+              {filteredInvoices.map((inv) => {
                 const client = getClientForInvoice(inv)
                 const status = (inv.status ?? 'draft') as string
                 return (
-                  <div
+                  <Link
                     key={inv.id}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => router.push(`/dashboard/invoices/${inv.id}`)}
-                    onKeyDown={(e) => e.key === 'Enter' && router.push(`/dashboard/invoices/${inv.id}`)}
-                    className="flex cursor-pointer items-center justify-between rounded-2xl border border-border bg-card p-5 transition-colors hover:bg-accent/50 lg:p-6"
+                    href={`/dashboard/invoices/${inv.id}`}
+                    className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-border bg-card p-5 transition-colors hover:bg-accent/50 active:bg-accent/70 lg:p-6 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                   >
-                    <div className="flex items-center space-x-4 min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-1 items-center gap-4">
+                      <div
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                        }}
+                        className="shrink-0"
+                      >
+                        <Checkbox
+                          className="size-4"
+                          checked={selectedIds.has(String(inv.id))}
+                          onCheckedChange={(checked) => {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev)
+                              if (checked) next.add(String(inv.id))
+                              else next.delete(String(inv.id))
+                              return next
+                            })
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
                       <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-border bg-muted font-medium text-foreground">
                         {invoiceBadgeNumber(inv)}
                       </div>
@@ -663,17 +884,29 @@ export function InvoicesPageClient({
                       >
                         {STATUS_LABELS[status] ?? status}
                       </span>
-                      <div className="mt-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        <Link
-                          href={`/dashboard/invoices?edit=${inv.id}`}
-                          className="text-[10px] font-medium uppercase tracking-wider text-primary hover:underline"
-                        >
-                          Edit
-                        </Link>
+                      <div
+                        className="mt-2 flex items-center gap-2"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                        }}
+                      >
                         <button
                           type="button"
                           onClick={(e) => {
                             e.preventDefault()
+                            e.stopPropagation()
+                            router.push(`/dashboard/invoices?edit=${inv.id}`)
+                          }}
+                          className="text-[10px] font-medium uppercase tracking-wider text-primary hover:underline"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
                             setDeleteInvoiceId(String(inv.id))
                           }}
                           className="text-[10px] font-medium uppercase tracking-wider text-destructive hover:underline"
@@ -682,9 +915,10 @@ export function InvoicesPageClient({
                         </button>
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 )
-              })
+              })}
+              </>
             ) : invoices.length > 0 ? (
               <div className="py-24 text-center flex flex-col items-center justify-center space-y-4">
                 <div className="flex size-20 items-center justify-center rounded-2xl border border-border bg-muted text-muted-foreground">
@@ -728,9 +962,11 @@ export function InvoicesPageClient({
               currentPage={currentPage}
               totalPages={totalPages}
               basePath="/dashboard/invoices"
-              preserveParams={
-                initialEditId ? { edit: initialEditId } : initialNewInvoice ? { new: '1' } : undefined
-              }
+              preserveParams={{
+                ...(sortBy !== 'newest' && { sort: sortBy }),
+                ...(initialEditId && { edit: initialEditId }),
+                ...(initialNewInvoice && { new: '1' }),
+              }}
             />
           )}
         </>
@@ -741,7 +977,10 @@ export function InvoicesPageClient({
           <div className="app-header-sticky flex min-h-[5.5rem] shrink-0 items-center justify-between border-b border-border px-6 py-4">
             <button
               type="button"
-              onClick={() => setViewMode(ViewMode.LIST)}
+              onClick={() => {
+                setFormError(null)
+                setViewMode(ViewMode.LIST)
+              }}
               className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
             >
               Cancel
@@ -765,6 +1004,13 @@ export function InvoicesPageClient({
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pt-4 p-5 md:p-10 space-y-8 no-scrollbar pb-72 md:pb-64">
+            {formError && (
+              <Alert variant="destructive" className="rounded-xl">
+                <AlertCircle className="size-4" />
+                <AlertTitle>Please fix the following</AlertTitle>
+                <AlertDescription>{formError}</AlertDescription>
+              </Alert>
+            )}
             {!activeInvoice.id && (
               <div className="rounded-xl border border-border bg-muted/50 p-5">
                 <div className="mb-3 flex items-center gap-2 text-primary">
@@ -1001,7 +1247,7 @@ export function InvoicesPageClient({
                             min={0}
                             step={0.01}
                             className="min-h-[44px] w-full rounded-xl border border-input bg-background px-3 py-2.5 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring touch-manipulation"
-                            value={item.quantity}
+                            value={item.quantity === 0 ? '' : item.quantity}
                             onChange={(e) => {
                               const n = [...items]
                               n[idx] = { ...n[idx], quantity: parseFloat(e.target.value) || 0 }
@@ -1016,7 +1262,7 @@ export function InvoicesPageClient({
                             min={0}
                             step={0.01}
                             className="min-h-[44px] w-full rounded-xl border border-input bg-background px-3 py-2.5 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring touch-manipulation"
-                            value={item.rate}
+                            value={item.rate === 0 ? '' : item.rate}
                             onChange={(e) => {
                               const n = [...items]
                               n[idx] = { ...n[idx], rate: parseFloat(e.target.value) || 0 }
@@ -1083,7 +1329,7 @@ export function InvoicesPageClient({
                       setActiveInvoice((prev) => ({ ...prev, status: e.target.value }))
                     }
                   >
-                    {['draft', 'sent', 'paid', 'overdue', 'cancelled'].map((s) => (
+                    {['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled'].map((s) => (
                       <option key={s} value={s}>
                         {STATUS_LABELS[s] ?? s}
                       </option>
@@ -1092,19 +1338,9 @@ export function InvoicesPageClient({
                 </div>
                 <div className="space-y-2">
                   <label className="block text-xs font-medium text-muted-foreground">Tax rate (%)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    className="min-h-[44px] w-full rounded-xl border border-input bg-background px-4 py-3 text-base text-foreground focus:outline-none focus:ring-2 focus:ring-ring touch-manipulation"
-                    value={activeInvoice.taxRate ?? 0}
-                    onChange={(e) =>
-                      setActiveInvoice((prev) => ({
-                        ...prev,
-                        taxRate: parseFloat(e.target.value) || 0,
-                      }))
-                    }
-                  />
+                  <div className="flex min-h-[44px] items-center rounded-xl border border-border bg-muted/50 px-4 py-3 text-base font-medium text-foreground">
+                    15%
+                  </div>
                 </div>
               </section>
 

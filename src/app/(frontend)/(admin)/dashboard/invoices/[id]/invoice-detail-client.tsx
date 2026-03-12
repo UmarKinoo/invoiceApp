@@ -14,19 +14,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, formatDisplayDate } from '@/lib/utils'
 import { displayInvoiceNumber } from '@/lib/invoice-utils'
 import { updateInvoice, deleteInvoice } from '../actions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardAction,
-  CardDescription,
-} from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import {
   Dialog,
   DialogContent,
@@ -59,6 +52,7 @@ import { cn } from '@/lib/utils'
 const STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
   { value: 'sent', label: 'Sent' },
+  { value: 'partial', label: 'Partial' },
   { value: 'paid', label: 'Paid' },
   { value: 'overdue', label: 'Overdue' },
   { value: 'cancelled', label: 'Cancelled' },
@@ -67,6 +61,7 @@ const STATUS_OPTIONS = [
 const STATUS_BADGE_CLASS: Record<string, string> = {
   draft: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
   sent: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  partial: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   paid: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
   overdue: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
   cancelled: 'bg-muted text-muted-foreground border-border',
@@ -82,6 +77,9 @@ type InvoiceDetailClientProps = {
     total: number
     subtotal?: number
     tax?: number
+    discount?: number
+    shipping?: number
+    taxRate?: number
     carNumber?: string | null
     notes?: string | null
     items?: { description?: string; quantity?: number; rate?: number }[]
@@ -90,11 +88,52 @@ type InvoiceDetailClientProps = {
     name?: string | null
     company?: string | null
     email?: string | null
+    address?: string | null
   } | null
+  business: {
+    businessName: string
+    businessAddress: string
+    businessEmail: string
+    businessPhone: string
+    businessBrn: string
+    vatRegistrationNumber: string
+    logoUrl: string | null
+    logo: { url?: string } | number | null
+  } | null
+  deliveredBy?: string | null
   printMode?: boolean
 }
 
-export function InvoiceDetailClient({ invoice, client, printMode = false }: InvoiceDetailClientProps) {
+function getLogoUrl(business: InvoiceDetailClientProps['business']): string | null {
+  if (!business) return null
+  const logo = business.logo
+  if (logo && typeof logo === 'object' && logo !== null && 'url' in logo && logo.url) return logo.url
+  return business.logoUrl
+}
+
+/** If carNumber is set, use it; otherwise try to extract from notes (e.g. "Car number: 3327 JZ 20"). Returns display value and notes with car lines removed. */
+function getCarDisplayAndNotes(carNumber: string | null | undefined, notes: string | null | undefined): { carDisplay: string; notesForDisplay: string } {
+  const car = (carNumber ?? '').trim()
+  const noteText = (notes ?? '').trim()
+  const lines = noteText ? noteText.split(/\r?\n/) : []
+  const carLineRegex = /^\s*(?:Car number|Car)\s*:?\s*(.+)$/i
+  let extractedCar = ''
+  const keptLines: string[] = []
+  for (const line of lines) {
+    const m = line.match(carLineRegex)
+    if (m) {
+      const value = m[1].trim()
+      if (value && !extractedCar) extractedCar = value
+      continue
+    }
+    keptLines.push(line)
+  }
+  const carDisplay = car || extractedCar || '—'
+  const notesForDisplay = keptLines.join('\n').trim()
+  return { carDisplay, notesForDisplay }
+}
+
+export function InvoiceDetailClient({ invoice, client, business, deliveredBy, printMode = false }: InvoiceDetailClientProps) {
   const router = useRouter()
   const [status, setStatus] = useState(invoice.status ?? 'draft')
   const [statusSaving, setStatusSaving] = useState(false)
@@ -112,6 +151,11 @@ export function InvoiceDetailClient({ invoice, client, printMode = false }: Invo
 
   const items = invoice.items ?? []
   const subtotal = invoice.subtotal ?? items.reduce((acc, i) => acc + (i.quantity ?? 0) * (i.rate ?? 0), 0)
+  const discount = invoice.discount ?? 0
+  const shipping = invoice.shipping ?? 0
+  const tax = invoice.tax ?? 0
+  const logoUrl = getLogoUrl(business)
+  const { carDisplay, notesForDisplay } = getCarDisplayAndNotes(invoice.carNumber, invoice.notes)
 
   const handleStatusChange = async (newStatus: string) => {
     setStatusSaving(true)
@@ -247,42 +291,103 @@ export function InvoiceDetailClient({ invoice, client, printMode = false }: Invo
         </div>
       </header>
 
-      <Card className="max-w-3xl print:shadow-none">
-        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-4 border-b px-6 pb-6 pt-0">
-          <div className="space-y-1">
-            <CardTitle className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Bill To
-            </CardTitle>
-            <p className="text-lg font-semibold text-foreground">
-              {client?.name ?? '—'}
-            </p>
-            <CardDescription className="mt-0">
-              {client?.company ?? '—'}
-            </CardDescription>
-          </div>
-          <CardAction className="text-right">
-            <Label className="mb-1.5 block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              Status
-            </Label>
-            <Badge
-              variant="outline"
-              className={cn(
-                'font-semibold uppercase',
-                STATUS_BADGE_CLASS[status] ?? 'bg-muted text-muted-foreground border-border'
+      <Card className="max-w-3xl print:shadow-none overflow-hidden">
+        {/* Header: Logo + From | Tax invoice block; then Bill to */}
+        <CardHeader className="px-6 py-5 space-y-5">
+          <div className="flex flex-row flex-wrap items-start justify-between gap-6">
+            {/* Left: larger logo only */}
+            <div className="flex items-start min-w-0">
+              {logoUrl ? (
+                <div className="shrink-0 w-40 flex items-center justify-start">
+                  <img src={logoUrl} alt="Company logo" className="max-h-20 w-full object-contain object-left" />
+                </div>
+              ) : (
+                <div className="shrink-0 w-40 h-20 rounded-lg bg-muted/50 flex items-center justify-center">
+                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Logo</span>
+                </div>
               )}
-            >
-              {status}
-            </Badge>
-          </CardAction>
+            </div>
+            {/* Right: Tax invoice + number + meta in tight block */}
+            <div className="shrink-0 text-right flex flex-col items-end gap-0.5">
+              <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/90">
+                Tax invoice
+              </p>
+              <p className="text-sm font-semibold tabular-nums text-foreground leading-tight">
+                #{invoice.invoiceNumber ?? invoice.id}
+              </p>
+              <div className="flex flex-col items-end gap-0.5 text-sm text-muted-foreground mt-1">
+                <span>Date {formatDisplayDate(invoice.date) || '—'}</span>
+                <span>Due {formatDisplayDate(invoice.dueDate) || '—'}</span>
+                <span>Car {carDisplay}</span>
+              </div>
+              <Badge
+                variant="outline"
+                className={cn(
+                  'mt-1.5 font-medium uppercase text-[10px] tracking-wide',
+                  STATUS_BADGE_CLASS[status] ?? 'bg-muted text-muted-foreground border-border'
+                )}
+              >
+                {status}
+              </Badge>
+            </div>
+          </div>
+
+          {/* From and Bill to on the same row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t border-border/80">
+            <div>
+              <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/90 mb-1">
+                From
+              </p>
+              {business ? (
+                <>
+                  <p className="text-base font-semibold text-foreground leading-tight">
+                    {business.businessName}
+                  </p>
+                  {business.businessAddress && (
+                    <p className="text-sm text-muted-foreground mt-1 leading-snug whitespace-pre-line">
+                      {business.businessAddress}
+                    </p>
+                  )}
+                  {business.businessEmail && (
+                    <p className="text-sm text-muted-foreground mt-0.5">{business.businessEmail}</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">—</p>
+              )}
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/90 mb-1">
+                Bill to
+              </p>
+              <p className="text-base font-semibold text-foreground">{client?.name ?? '—'}</p>
+              {client?.company && (
+                <p className="text-sm text-muted-foreground mt-0.5">{client.company}</p>
+              )}
+              {client?.email && (
+                <p className="text-sm text-muted-foreground mt-0.5">{client.email}</p>
+              )}
+              {client?.address && (
+                <p className="text-sm text-muted-foreground mt-0.5 whitespace-pre-line">{client.address}</p>
+              )}
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-6 px-6">
-          <Table>
+        <CardContent className="flex flex-col min-h-[420px] px-6 pb-6">
+          <div className="flex-1 min-h-0">
+            <Table>
             <TableHeader>
               <TableRow className="border-b hover:bg-transparent">
                 <TableHead className="py-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Item
+                  Description
                 </TableHead>
-                <TableHead className="py-3 text-right text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                <TableHead className="py-3 text-right text-[10px] font-medium uppercase tracking-wider text-muted-foreground w-20">
+                  Qty
+                </TableHead>
+                <TableHead className="py-3 text-right text-[10px] font-medium uppercase tracking-wider text-muted-foreground w-28">
+                  Price
+                </TableHead>
+                <TableHead className="py-3 text-right text-[10px] font-medium uppercase tracking-wider text-muted-foreground w-28">
                   Amount
                 </TableHead>
               </TableRow>
@@ -291,10 +396,13 @@ export function InvoiceDetailClient({ invoice, client, printMode = false }: Invo
               {items.map((item, idx) => (
                 <TableRow key={idx}>
                   <TableCell className="py-4">
-                    <p className="text-sm font-medium text-foreground">{item.description}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {item.quantity} × {formatCurrency(Number(item.rate))}
-                    </p>
+                    <p className="text-sm font-medium text-foreground">{item.description ?? '—'}</p>
+                  </TableCell>
+                  <TableCell className="py-4 text-right text-sm text-muted-foreground">
+                    {item.quantity ?? 0}
+                  </TableCell>
+                  <TableCell className="py-4 text-right text-sm text-muted-foreground">
+                    {formatCurrency(Number(item.rate ?? 0))}
                   </TableCell>
                   <TableCell className="py-4 text-right text-sm font-medium text-foreground">
                     {formatCurrency((item.quantity ?? 0) * (item.rate ?? 0))}
@@ -303,38 +411,93 @@ export function InvoiceDetailClient({ invoice, client, printMode = false }: Invo
               ))}
             </TableBody>
           </Table>
-          <div className="space-y-2">
+          </div>
+          <div className="shrink-0 pt-4 mt-auto space-y-2 border-t border-border/80">
             <div className="flex justify-between text-sm font-medium text-muted-foreground">
               <span>Subtotal</span>
               <span>{formatCurrency(subtotal)}</span>
             </div>
-            <div className="flex justify-between text-sm font-semibold text-primary">
+            {tax > 0 && (
+              <div className="flex justify-between text-sm font-medium text-muted-foreground">
+                <span>VAT ({invoice.taxRate ?? 15}%)</span>
+                <span>{formatCurrency(tax)}</span>
+              </div>
+            )}
+            {discount > 0 && (
+              <div className="flex justify-between text-sm font-medium text-muted-foreground">
+                <span>Discount</span>
+                <span>-{formatCurrency(discount)}</span>
+              </div>
+            )}
+            {shipping > 0 && (
+              <div className="flex justify-between text-sm font-medium text-muted-foreground">
+                <span>Shipping</span>
+                <span>{formatCurrency(shipping)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm font-semibold text-primary pt-2">
               <span className="uppercase tracking-wider">Total</span>
-              <span className="font-mono text-lg tabular-nums sm:text-xl">{formatCurrency(Number(invoice.total))}</span>
+              <span className="font-mono text-base tabular-nums sm:text-lg">{formatCurrency(Number(invoice.total))}</span>
             </div>
           </div>
-          {invoice.carNumber && (
-            <>
-              <Separator />
-              <div className="space-y-1.5">
-                <Label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                  Car number
-                </Label>
-                <p className="text-sm text-muted-foreground">{invoice.carNumber}</p>
+          {(business || deliveredBy) && (
+            <footer className="mt-4 pt-4 border-t border-border/80 rounded-lg bg-muted/30 px-5 py-4">
+              <div className="flex flex-wrap items-end justify-between gap-6">
+                {business && (
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/90">
+                      Payment details
+                    </p>
+                    <p className="text-sm text-foreground">
+                      Cheque to <span className="font-semibold">{business.businessName || '—'}</span>
+                    </p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-muted-foreground">
+                      {business.businessPhone && <span>T {business.businessPhone}</span>}
+                      {business.businessBrn && <span>BRN {business.businessBrn}</span>}
+                      {business.vatRegistrationNumber && (
+                        <span>VAT {business.vatRegistrationNumber}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {deliveredBy && (
+                  <div className="text-right min-w-0">
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/90">
+                      Delivered by
+                    </p>
+                    <p className="text-sm font-medium text-foreground mt-0.5">{deliveredBy}</p>
+                  </div>
+                )}
               </div>
-            </>
+              <div className="mt-6 pt-4 border-t border-border/80 flex items-center justify-center gap-2">
+                <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Powered by</span>
+                <div className="flex items-center gap-1">
+                  <img src="/swiftbook-icon.png" alt="" className="h-4 w-4 object-contain shrink-0" aria-hidden />
+                  <span className="text-sm font-semibold tracking-tight text-muted-foreground">Swiftbook</span>
+                </div>
+              </div>
+            </footer>
           )}
-          {invoice.notes && (
+          {!business && !deliveredBy ? (
+            <div className="mt-4 pt-4 border-t border-border/80 flex items-center justify-center gap-2">
+              <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Powered by</span>
+              <div className="flex items-center gap-1">
+                <img src="/swiftbook-icon.png" alt="" className="h-4 w-4 object-contain shrink-0" aria-hidden />
+                <span className="text-sm font-semibold tracking-tight text-muted-foreground">Swiftbook</span>
+              </div>
+            </div>
+          ) : null}
+          {notesForDisplay ? (
             <>
               <Separator />
               <div className="space-y-1.5">
                 <Label className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   Notes
                 </Label>
-                <p className="text-sm text-muted-foreground">{invoice.notes}</p>
+                <p className="text-sm text-muted-foreground whitespace-pre-line">{notesForDisplay}</p>
               </div>
             </>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 

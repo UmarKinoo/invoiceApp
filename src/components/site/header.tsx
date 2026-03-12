@@ -13,7 +13,8 @@ export const Header = async () => {
       className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-md"
       containerClassName="flex items-center justify-between gap-4"
     >
-      <Link href="/" className="text-foreground">
+      <Link href="/" className="text-foreground flex items-center gap-2">
+        <img src="/swiftbook-icon.png" alt="" className="h-6 w-6 object-contain shrink-0" aria-hidden />
         <span className="text-lg font-semibold tracking-tight">Swiftbook</span>
       </Link>
 

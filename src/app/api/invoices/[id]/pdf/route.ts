@@ -1,6 +1,7 @@
 import React from 'react'
 import { NextResponse } from 'next/server'
 import { getPayloadClient } from '@/lib/payload-server'
+import { getUser } from '@/lib/auth'
 import ReactPDF, { Document } from '@react-pdf/renderer'
 import { InvoicePdfDocument } from '@/lib/invoice-pdf-document'
 import type { Invoice } from '@/payload-types'
@@ -55,8 +56,38 @@ export async function GET(
     0
   )
 
-  const settings = await payload.findGlobal({ slug: 'settings' })
-  const currency = settings?.currency ?? 'MUR'
+  const settings = (await payload.findGlobal({ slug: 'settings', depth: 1 })) as unknown as Record<string, unknown> | null
+  const currency = (settings?.currency as string) ?? 'MUR'
+  const logoObj = settings?.logo as { url?: string } | number | null | undefined
+  const logoWhiteObj = settings?.logoWhite as { url?: string } | number | null | undefined
+  const mainLogoUrl =
+    (logoObj && typeof logoObj === 'object' && logoObj !== null && 'url' in logoObj && logoObj.url) ||
+    (settings?.logoUrl as string) ||
+    null
+  const logoWhiteUrl =
+    logoWhiteObj && typeof logoWhiteObj === 'object' && logoWhiteObj !== null && 'url' in logoWhiteObj
+      ? logoWhiteObj.url
+      : null
+  const appBaseUrl = (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+    'http://localhost:3000'
+  ).replace(/\/$/, '')
+
+  let logoUrl: string | null = logoWhiteUrl || mainLogoUrl
+  if (logoUrl && typeof logoUrl === 'string' && logoUrl.startsWith('/')) {
+    logoUrl = appBaseUrl + logoUrl
+  }
+  const business = settings
+    ? {
+        businessName: (settings.businessName as string) ?? '',
+        businessAddress: (settings.businessAddress as string) ?? '',
+        businessEmail: (settings.businessEmail as string) ?? '',
+        businessPhone: (settings.businessPhone as string) ?? '',
+        businessBrn: (settings.businessBrn as string) ?? '',
+        vatRegistrationNumber: (settings.vatRegistrationNumber as string) ?? '',
+      }
+    : null
 
   const invoiceData = {
     invoiceNumber: inv.invoiceNumber ?? null,
@@ -66,15 +97,25 @@ export async function GET(
     total: Number(inv.total),
     subtotal,
     tax: Number(inv.tax),
+    discount: Number(inv.discount) ?? 0,
+    shipping: Number(inv.shipping) ?? 0,
+    carNumber: inv.carNumber ?? null,
     notes: inv.notes ?? null,
     items,
   }
+
+  const user = await getUser()
+  const deliveredBy = user?.email ?? null
 
   try {
     const doc = React.createElement(InvoicePdfDocument, {
       invoice: invoiceData,
       client: clientData,
       currency,
+      business,
+      logoUrl,
+      deliveredBy,
+      appBaseUrl,
     })
     const pdfStream = await ReactPDF.renderToStream(
       doc as React.ReactElement<React.ComponentProps<typeof Document>>

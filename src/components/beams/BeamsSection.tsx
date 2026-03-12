@@ -13,10 +13,18 @@ export function BeamsSection({ isLoggedIn = false }: BeamsSectionProps) {
     <div className="relative w-full h-screen h-[100dvh] flex flex-col items-center justify-center overflow-hidden">
       <BeamsBackground />
       <div className="relative z-10 w-full max-w-2xl mx-auto px-4 sm:px-6 text-center space-y-5 sm:space-y-8 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-        <div className="space-y-0.5">
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-white tracking-tighter leading-tight">
-            Swiftbook
-          </h1>
+        <div className="flex flex-col items-center gap-4 sm:gap-5">
+          <div className="flex items-center justify-center gap-3 sm:gap-4">
+            <img
+              src="/swiftbook-icon.png"
+              alt=""
+              className="h-12 w-12 sm:h-14 sm:w-14 object-contain shrink-0"
+              aria-hidden
+            />
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-white tracking-tighter leading-tight">
+              Swiftbook
+            </h1>
+          </div>
           <p className="text-base sm:text-lg text-white/80 max-w-md mx-auto -mt-0.5">
             Powering modern businesses.
           </p>

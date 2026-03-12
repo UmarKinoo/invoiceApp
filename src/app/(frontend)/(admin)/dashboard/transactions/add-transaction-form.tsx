@@ -8,6 +8,7 @@ import { createTransaction } from './actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
   SelectContent,
@@ -23,17 +24,22 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 
-export function AddTransactionForm() {
+type InvoiceOption = { id: number; invoiceNumber: string | null }
+
+export function AddTransactionForm({ invoices = [] }: { invoices?: InvoiceOption[] }) {
   const router = useRouter()
   const [clients, setClients] = useState<{ id: number; name: string | null; company: string | null; email: string | null }[]>([])
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [form, setForm] = useState({
+    type: 'income' as 'income' | 'expense',
     date: new Date().toISOString().split('T')[0],
     amount: 0,
     clientId: '',
+    invoiceId: '',
     reference: '',
     method: 'stripe',
+    notes: '',
   })
 
   useEffect(() => {
@@ -45,20 +51,26 @@ export function AddTransactionForm() {
     if (!form.amount || !form.clientId) return
     setStatus('loading')
     const result = await createTransaction({
+      type: form.type,
       date: form.date,
       amount: form.amount,
       client: Number(form.clientId),
+      invoice: form.invoiceId ? Number(form.invoiceId) : undefined,
       reference: form.reference || undefined,
       method: form.method,
+      notes: form.notes || undefined,
     })
     if (result.doc) {
       setOpen(false)
       setForm({
+        type: 'income',
         date: new Date().toISOString().split('T')[0],
         amount: 0,
         clientId: '',
+        invoiceId: '',
         reference: '',
         method: 'stripe',
+        notes: '',
       })
       router.refresh()
     } else {
@@ -72,14 +84,29 @@ export function AddTransactionForm() {
       <DialogTrigger asChild>
         <Button size="sm" className="gap-2">
           <Plus className="size-4" />
-          <span className="hidden lg:inline">Log Payment</span>
+          <span className="hidden lg:inline">Log transaction</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Log Payment</DialogTitle>
+          <DialogTitle>Log transaction</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label>Type</Label>
+            <Select
+              value={form.type}
+              onValueChange={(v) => setForm((p) => ({ ...p, type: v as 'income' | 'expense' }))}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="income">Income</SelectItem>
+                <SelectItem value="expense">Expense</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-2">
             <Label>Amount</Label>
             <Input
@@ -92,7 +119,7 @@ export function AddTransactionForm() {
             />
           </div>
           <div className="space-y-2">
-            <Label>Client</Label>
+            <Label>{form.type === 'income' ? 'Client' : 'Payee / vendor'}</Label>
             <Select
               value={form.clientId || undefined}
               onValueChange={(v) => setForm((p) => ({ ...p, clientId: v }))}
@@ -110,10 +137,31 @@ export function AddTransactionForm() {
               </SelectContent>
             </Select>
           </div>
+          {form.type === 'income' && invoices.length > 0 && (
+            <div className="space-y-2">
+              <Label>Link to invoice (optional)</Label>
+              <Select
+                value={form.invoiceId || '__none__'}
+                onValueChange={(v) => setForm((p) => ({ ...p, invoiceId: v === '__none__' ? '' : v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="None" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {invoices.map((inv) => (
+                    <SelectItem key={inv.id} value={String(inv.id)}>
+                      {inv.invoiceNumber ?? `#${inv.id}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-2">
             <Label>Reference</Label>
             <Input
-              placeholder="e.g. INV-001"
+              placeholder="e.g. PAY-001 or invoice number"
               value={form.reference}
               onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))}
             />
@@ -132,8 +180,19 @@ export function AddTransactionForm() {
                 <SelectItem value="paypal">PayPal</SelectItem>
                 <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
                 <SelectItem value="cash">Cash</SelectItem>
+                <SelectItem value="check">Check</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Notes (optional)</Label>
+            <Textarea
+              placeholder="Notes"
+              value={form.notes}
+              onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+              rows={2}
+              className="resize-none"
+            />
           </div>
           {status === 'error' && (
             <p className="text-sm text-destructive">Failed to save.</p>

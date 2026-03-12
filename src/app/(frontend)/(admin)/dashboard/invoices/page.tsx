@@ -6,13 +6,24 @@ import { getNextInvoiceNumber } from './actions'
 
 export const dynamic = 'force-dynamic'
 
+const SORT_MAP: Record<string, string> = {
+  newest: '-updatedAt',
+  oldest: 'updatedAt',
+  'total-desc': '-total',
+  'total-asc': 'total',
+}
+
 export default async function InvoicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ edit?: string; new?: string; page?: string }>
+  searchParams: Promise<{ edit?: string; new?: string; page?: string; sort?: string }>
 }) {
-  const { edit: editId, new: newInvoice, page: pageParam } = await searchParams
+  const { edit: editId, new: newInvoice, page: pageParam, sort: sortParam } = await searchParams
   const page = Math.max(1, parseInt(String(pageParam ?? '1'), 10) || 1)
+  const sortBy = (sortParam === 'oldest' || sortParam === 'total-desc' || sortParam === 'total-asc')
+    ? sortParam
+    : 'newest'
+  const payloadSort = SORT_MAP[sortBy] ?? '-updatedAt'
 
   let invoices: Invoice[] = []
   let totalPages = 1
@@ -27,11 +38,11 @@ export default async function InvoicesPage({
         collection: 'invoices',
         pagination: false,
         depth: 1,
-        sort: '-updatedAt',
+        sort: payloadSort,
       }),
       payload.count({ collection: 'invoices' }),
       payload.find({ collection: 'clients', limit: 100, depth: 0 }),
-      payload.findGlobal({ slug: 'settings' }),
+      payload.findGlobal({ slug: 'settings', depth: 1 }),
     ])
     const allDocs = (invRes.docs ?? []) as Invoice[]
     const start = (page - 1) * LIST_PAGE_SIZE
@@ -77,15 +88,21 @@ export default async function InvoicesPage({
     }
   })
 
+  const s = settings as Record<string, unknown> | null
+  const logoObj = s?.logo as { url?: string } | number | null | undefined
+  const resolvedLogoUrl =
+    (logoObj && typeof logoObj === 'object' && logoObj !== null && 'url' in logoObj && logoObj.url) ||
+    (s?.logoUrl as string) ||
+    null
   const initialSettings = settings
     ? {
-        businessName: settings.businessName ?? '',
-        businessAddress: settings.businessAddress ?? '',
-        businessEmail: settings.businessEmail ?? '',
-        logoUrl: settings.logoUrl ?? null,
-        invoicePrefix: settings.invoicePrefix ?? 'INV-',
-        taxRateDefault: Number(settings.taxRateDefault) ?? 0,
-        currency: settings.currency ?? 'MUR',
+        businessName: (s?.businessName as string) ?? '',
+        businessAddress: (s?.businessAddress as string) ?? '',
+        businessEmail: (s?.businessEmail as string) ?? '',
+        logoUrl: resolvedLogoUrl,
+        invoicePrefix: (s?.invoicePrefix as string) ?? 'INV-',
+        taxRateDefault: Number(s?.taxRateDefault) ?? 0,
+        currency: (s?.currency as string) ?? 'MUR',
       }
     : null
 
@@ -102,6 +119,7 @@ export default async function InvoicesPage({
       totalPages={totalPages}
       totalDocs={totalDocs}
       currentPage={page}
+      initialSortBy={sortBy}
       initialEditId={editId ?? undefined}
       initialNewInvoice={newInvoice === '1'}
     />

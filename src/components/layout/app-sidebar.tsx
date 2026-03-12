@@ -162,8 +162,9 @@ export function AppSidebar({ user }: { user: User | null }) {
 
   return (
     <Sidebar className="border-sidebar-border border-r">
-      <SidebarHeader className="p-4">
-        <Link href="/" className="text-sidebar-foreground">
+      <SidebarHeader className="flex justify-center p-4">
+        <Link href="/" className="text-sidebar-foreground flex items-center gap-2">
+          <img src="/swiftbook-icon.png" alt="" className="h-6 w-6 object-contain shrink-0" aria-hidden />
           <span className="text-lg font-semibold tracking-tight">Swiftbook</span>
         </Link>
       </SidebarHeader>
