@@ -11,9 +11,10 @@ export default async function DashboardPage() {
   let clients: Client[] = []
   try {
     const payload = await getPayloadClient()
+    // Fetch all invoices and clients so dashboard stats (Cash Flow, Capital Out, Registry, chart) are correct
     const [invRes, clientsRes] = await Promise.all([
-      payload.find({ collection: 'invoices', limit: 10, sort: '-updatedAt' }),
-      payload.find({ collection: 'clients', limit: 50 }),
+      payload.find({ collection: 'invoices', pagination: false, sort: '-updatedAt', depth: 0 }),
+      payload.find({ collection: 'clients', pagination: false, depth: 0 }),
     ])
     invoices = (invRes.docs ?? []) as Invoice[]
     clients = (clientsRes.docs ?? []) as Client[]
