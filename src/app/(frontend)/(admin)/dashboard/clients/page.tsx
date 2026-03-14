@@ -8,24 +8,35 @@ export const dynamic = 'force-dynamic'
 export default async function ClientsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>
+  searchParams: Promise<{ page?: string; search?: string }>
 }) {
-  const { page: pageParam } = await searchParams
+  const { page: pageParam, search: searchParam } = await searchParams
   const page = Math.max(1, parseInt(String(pageParam ?? '1'), 10) || 1)
+  const search = (searchParam ?? '').trim()
 
   let clients: Client[] = []
   let totalPages = 1
   let totalDocs = 0
   try {
     const payload = await getPayloadClient()
+    const where = search
+      ? {
+          or: [
+            { name: { like: `%${search}%` } },
+            { company: { like: `%${search}%` } },
+            { email: { like: `%${search}%` } },
+          ],
+        }
+      : undefined
     const [res, countRes] = await Promise.all([
       payload.find({
         collection: 'clients',
+        where,
         pagination: false,
         depth: 0,
         sort: 'name',
       }),
-      payload.count({ collection: 'clients' }),
+      payload.count({ collection: 'clients', where }),
     ])
     const allDocs = (res.docs ?? []) as Client[]
     const start = (page - 1) * LIST_PAGE_SIZE
@@ -38,6 +49,7 @@ export default async function ClientsPage({
 
   return (
     <ClientsPageClient
+      initialSearch={search}
       initialClients={clients.map((c) => ({
         id: String(c.id),
         name: c.name ?? null,
@@ -50,6 +62,7 @@ export default async function ClientsPage({
       totalPages={totalPages}
       totalDocs={totalDocs}
       currentPage={page}
+      preserveSearch={search}
     />
   )
 }

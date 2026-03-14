@@ -1,14 +1,22 @@
 import { NextResponse } from 'next/server'
 import { getPayloadClient } from '@/lib/payload-server'
-import { sendEmail } from '@/lib/email'
+import { sendEmail, invoiceEmailTemplate } from '@/lib/email'
+import { generateInvoicePdfBuffer } from '@/lib/generate-invoice-pdf'
 import { createActivityLog } from '@/collections/hooks/createActivityLog'
 import type { Invoice } from '@/payload-types'
+
+const appBaseUrl = (
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+  'http://localhost:3000'
+).replace(/\/$/, '')
 
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+  const invoiceId = Number(id)
   let body: { to?: string; subject?: string; body?: string }
   try {
     body = await req.json()
@@ -25,7 +33,7 @@ export async function POST(
   try {
     invoice = await payload.findByID({
       collection: 'invoices',
-      id: Number(id),
+      id: invoiceId,
       depth: 1,
     })
   } catch {
@@ -37,21 +45,69 @@ export async function POST(
 
   const inv = invoice as Invoice
   const subject = body.subject?.trim() || `Invoice ${inv.invoiceNumber ?? ''}`
-  const textBody = body.body?.trim() || `Please find your invoice ${inv.invoiceNumber ?? ''} attached or linked. Thank you.`
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <p>${textBody.replace(/\n/g, '<br>')}</p>
-        <p style="margin-top: 24px; font-size: 12px; color: #64748b;">
-          You can view and download the invoice from your dashboard or contact us for a PDF.
-        </p>
-      </body>
-    </html>
-  `
+  const messageBody = body.body?.trim() || ''
 
-  const result = await sendEmail({ to, subject, html })
+  // Generate PDF and attach to email
+  const pdfResult = await generateInvoicePdfBuffer(invoiceId)
+  const attachments: { filename: string; content?: Buffer; path?: string; contentId?: string }[] = pdfResult
+    ? [{ filename: pdfResult.filename, content: pdfResult.buffer }]
+    : []
+
+  // Inline logo: fetch and embed as content so Resend accepts it (path-only inline can fail)
+  const logoUrl = `${appBaseUrl}/swiftbook-icon.png`
+  let logoCid: string | undefined
+  try {
+    const logoRes = await fetch(logoUrl)
+    if (logoRes.ok) {
+      const logoBuffer = Buffer.from(await logoRes.arrayBuffer())
+      attachments.push({
+        filename: 'swiftbook-icon.png',
+        content: logoBuffer,
+        contentId: 'swiftbook-logo',
+      })
+      logoCid = 'swiftbook-logo'
+    }
+  } catch {
+    // Logo optional; template falls back to logoUrl
+  }
+
+  // Business logo for dark background (header): use main logo from settings
+  let businessLogoUrl: string | null = null
+  try {
+    const settings = (await payload.findGlobal({
+      slug: 'settings',
+      depth: 1,
+    })) as unknown as Record<string, unknown> | null
+    if (settings) {
+      const logoObj = settings.logo as { url?: string } | number | null | undefined
+      const url =
+        logoObj && typeof logoObj === 'object' && logoObj !== null && 'url' in logoObj
+          ? (logoObj.url as string)
+          : (settings.logoUrl as string) || null
+      if (url) {
+        businessLogoUrl = url.startsWith('/') ? `${appBaseUrl}${url}` : url
+      }
+    }
+  } catch {
+    // optional
+  }
+
+  const downloadUrl = `${appBaseUrl}/api/invoices/${id}/pdf`
+  const html = invoiceEmailTemplate({
+    invoiceNumber: String(inv.invoiceNumber ?? id),
+    downloadUrl,
+    messageBody: messageBody || undefined,
+    businessLogoUrl,
+    swiftbookLogoUrl: `${appBaseUrl}/swiftbook-icon.png`,
+    swiftbookLogoCid: logoCid,
+  })
+
+  const result = await sendEmail({
+    to,
+    subject,
+    html,
+    attachments: attachments.length > 0 ? attachments : undefined,
+  })
   if (!result.success) {
     return NextResponse.json(
       { error: 'Failed to send email', details: result.error },

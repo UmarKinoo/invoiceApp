@@ -1,9 +1,9 @@
 'use client'
 
 import React, { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { Download, Plus, Mail, Phone, Pencil, Trash2 } from 'lucide-react'
+import { Download, Plus, Mail, Phone, Pencil, Trash2, Search } from 'lucide-react'
 import { createClient, deleteClient } from './actions'
 import {
   AlertDialog,
@@ -47,14 +47,20 @@ export function ClientsPageClient({
   totalPages = 1,
   totalDocs = 0,
   currentPage = 1,
+  initialSearch = '',
+  preserveSearch = '',
 }: {
   initialClients: ClientDoc[]
   totalPages?: number
   totalDocs?: number
   currentPage?: number
+  initialSearch?: string
+  preserveSearch?: string
 }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [showAdd, setShowAdd] = useState(false)
+  const [searchInput, setSearchInput] = useState(initialSearch)
   const [deleteClientId, setDeleteClientId] = useState<string | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [newClient, setNewClient] = useState({
@@ -190,6 +196,46 @@ export function ClientsPageClient({
         />
       )}
 
+      <form
+        className="mb-4 flex items-center gap-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          const q = searchInput.trim()
+          const params = new URLSearchParams()
+          if (q) params.set('search', q)
+          params.set('page', '1')
+          router.push(`${pathname}?${params.toString()}`)
+        }}
+      >
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <Input
+            type="search"
+            placeholder="Search by name, company, email..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="pl-9"
+            aria-label="Search contacts"
+          />
+        </div>
+        <Button type="submit" variant="secondary" size="sm">
+          Search
+        </Button>
+        {preserveSearch && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearchInput('')
+              router.push(pathname)
+            }}
+          >
+            Clear
+          </Button>
+        )}
+      </form>
+
       {totalDocs > 0 && (
         <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-2">
           Showing {(currentPage - 1) * LIST_PAGE_SIZE + 1}–{Math.min(currentPage * LIST_PAGE_SIZE, totalDocs)} of {totalDocs} contacts
@@ -271,6 +317,7 @@ export function ClientsPageClient({
         currentPage={currentPage}
         totalPages={totalPages}
         basePath="/dashboard/clients"
+        preserveParams={preserveSearch ? { search: preserveSearch } : undefined}
       />
 
       <AlertDialog open={!!deleteClientId} onOpenChange={(open) => !open && setDeleteClientId(null)}>
