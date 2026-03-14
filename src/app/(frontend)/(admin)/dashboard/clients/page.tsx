@@ -20,13 +20,13 @@ export default async function ClientsPage({
   try {
     const payload = await getPayloadClient()
     const where = search
-      ? {
+      ? ({
           or: [
             { name: { like: `%${search}%` } },
             { company: { like: `%${search}%` } },
             { email: { like: `%${search}%` } },
           ],
-        }
+        } as Parameters<Awaited<ReturnType<typeof getPayloadClient>>['find']>[0]['where'])
       : undefined
     const [res, countRes] = await Promise.all([
       payload.find({
