@@ -16,6 +16,10 @@ export const metadata: Metadata = {
   title: 'Swiftbook',
   description: 'Invoices, contacts, and CRM in one place. Manage clients, quotes, invoices, tasks, and transactions.',
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'),
+  icons: {
+    icon: '/swiftbook-icon.png',
+    apple: '/swiftbook-icon.png',
+  },
   openGraph: {
     type: 'website',
     locale: 'en_US',

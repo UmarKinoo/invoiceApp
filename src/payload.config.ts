@@ -44,8 +44,10 @@ export default buildConfig({
   sharp,
   plugins: [
     payloadCloudPlugin(),
+    // Vercel Blob required in production (Vercel has no writable filesystem).
+    // Set BLOB_READ_WRITE_TOKEN in Vercel env; otherwise uploads try mkdir('media') and fail.
     vercelBlobStorage({
-      enabled: true,
+      enabled: Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim()),
       collections: {
         media: true,
       },
