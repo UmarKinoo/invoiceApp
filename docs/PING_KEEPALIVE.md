@@ -5,7 +5,7 @@ Supabase free tier can pause projects after inactivity. The app exposes `/api/pi
 ## How it works
 
 - **Route:** `GET /api/ping`
-- **Uses:** Same DB as the app (`DATABASE_URI`). It runs `payload.count({ collection: 'health_check' })`.
+- **Uses:** Same DB as the app (`DATABASE_URI`). It runs `payload.count({ collection: 'users' })`.
 - **Vercel:** If you deploy on Vercel, `vercel.json` runs this endpoint every 6 hours via cron.
 
 ## How to test
@@ -23,7 +23,7 @@ curl -s http://localhost:3000/api/ping | jq
 {
   "status": "ok",
   "db": "connected",
-  "health_check_count": 1
+  "users_count": 0
 }
 ```
 
@@ -58,3 +58,9 @@ Same response shape. If you see `"status": "ok"` and `"db": "connected"`, the fu
 - **Cron:** Vercel runs it every 6 hours if `vercel.json` crons are enabled.
 
 If the response is `"status": "ok"`, the keep-alive is working and you’re less likely to lose the Supabase DB due to inactivity.
+
+
+
+
+
+

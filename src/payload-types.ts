@@ -147,6 +147,10 @@ export interface User {
   emailVerificationExpires?: string | null;
   passwordResetToken?: string | null;
   passwordResetExpires?: string | null;
+  /**
+   * Set on each login; tokens issued before this are invalid (single session per email).
+   */
+  lastLoginAt?: string | null;
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -484,6 +488,7 @@ export interface UsersSelect<T extends boolean = true> {
   emailVerificationExpires?: T;
   passwordResetToken?: T;
   passwordResetExpires?: T;
+  lastLoginAt?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;

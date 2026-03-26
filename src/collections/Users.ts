@@ -63,6 +63,14 @@ export const Users: CollectionConfig = {
         hidden: true,
       },
     },
+    {
+      name: 'lastLoginAt',
+      type: 'date',
+      admin: {
+        hidden: true,
+        description: 'Set on each login; tokens issued before this are invalid (single session per email).',
+      },
+    },
     // If you want to add a username field, uncomment the following lines
     // {
     //   name: 'username',

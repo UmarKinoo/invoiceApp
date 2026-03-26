@@ -32,27 +32,34 @@ export default async function DashboardPage() {
       depth: 0,
     })
     const transactions = (txRes.docs ?? []) as Transaction[]
-    if (transactions.length === 0) {
-      ledgerStats = undefined
-    } else {
-      const revenue = transactions
-        .filter((t) => t.type === 'income')
-        .reduce((s, t) => s + (Number(t.amount) ?? 0), 0)
-      const invoicePayments = new Map<number, number>()
-      for (const t of transactions) {
-        if (t.type !== 'income' || !t.invoice) continue
-        const id = typeof t.invoice === 'object' ? (t.invoice as { id: number }).id : t.invoice
-        invoicePayments.set(id, (invoicePayments.get(id) ?? 0) + (Number(t.amount) ?? 0))
-      }
-      let outstanding = 0
-      for (const inv of invoices) {
-        if (inv.status === 'cancelled') continue
-        const total = Number(inv.total) ?? 0
-        const paid = invoicePayments.get(inv.id) ?? 0
-        outstanding += Math.max(0, total - paid)
-      }
-      ledgerStats = { revenue, outstanding }
+
+    const txRevenue = transactions
+      .filter((t) => t.type === 'income')
+      .reduce((s, t) => s + (Number(t.amount) ?? 0), 0)
+    const invoicePayments = new Map<number, number>()
+    for (const t of transactions) {
+      if (t.type !== 'income' || !t.invoice) continue
+      const id = typeof t.invoice === 'object' ? (t.invoice as { id: number }).id : t.invoice
+      invoicePayments.set(id, (invoicePayments.get(id) ?? 0) + (Number(t.amount) ?? 0))
     }
+
+    let paidTotal = 0
+    let outstanding = 0
+    for (const inv of invoices) {
+      if (inv.status === 'cancelled') continue
+      const total = Number(inv.total) ?? 0
+      if (inv.status === 'paid') {
+        paidTotal += total
+      } else {
+        const txPaid = invoicePayments.get(inv.id) ?? 0
+        const remaining = Math.max(0, total - txPaid)
+        paidTotal += txPaid
+        outstanding += remaining
+      }
+    }
+
+    const revenue = Math.max(paidTotal, txRevenue)
+    ledgerStats = { revenue, outstanding }
   } catch {
     ledgerStats = undefined
   }

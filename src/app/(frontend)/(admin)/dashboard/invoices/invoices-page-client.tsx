@@ -1,13 +1,13 @@
 'use client'
 
 import React, { useState, useMemo, useEffect, useRef } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   ChevronLeft,
   ChevronDown,
   Download,
   Filter,
+  ListChecks,
   Loader2,
   Plus,
   Receipt,
@@ -18,10 +18,11 @@ import {
   Zap,
   AlertCircle,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { formatCurrency } from '@/lib/utils'
 import { displayInvoiceNumber } from '@/lib/invoice-utils'
 import { createClient } from '../clients/actions'
-import { getNextInvoiceNumber, createInvoice, updateInvoice, deleteInvoice, bulkUpdateInvoiceStatus } from './actions'
+import { getNextInvoiceNumber, createInvoice, updateInvoice, deleteInvoice, bulkUpdateInvoiceStatus, getAllInvoiceIds } from './actions'
 import { parseInvoicePrompt } from '../actions/ai'
 import {
   AlertDialog,
@@ -251,11 +252,12 @@ export function InvoicesPageClient({
     return () => clearTimeout(t)
   }, [viewMode, activeInvoice, items])
 
-  // Bulk selection
+  // Bulk edit mode: toggled on/off; checkboxes only appear when active
+  const [bulkMode, setBulkMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkLoading, setBulkLoading] = useState(false)
+  const [selectAllLoading, setSelectAllLoading] = useState(false)
   const [bulkStatusKey, setBulkStatusKey] = useState(0)
-  const bulkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     setInvoices(initialInvoices)
@@ -702,6 +704,18 @@ export function InvoicesPageClient({
                   Clear filters
                 </button>
               )}
+              <Button
+                size="sm"
+                variant={bulkMode ? 'secondary' : 'outline'}
+                className="h-9 gap-1.5 text-xs font-medium ml-auto"
+                onClick={() => {
+                  setBulkMode((v) => !v)
+                  if (bulkMode) setSelectedIds(new Set())
+                }}
+              >
+                <ListChecks className="size-3.5" />
+                {bulkMode ? 'Exit bulk edit' : 'Bulk edit'}
+              </Button>
             </div>
             {(filterStatus || filterClientId || searchQuery.trim()) && (
               <p className="text-[10px] text-muted-foreground">
@@ -715,78 +729,81 @@ export function InvoicesPageClient({
             )}
           </div>
 
-          {/* Bulk actions bar */}
-          {selectedIds.size > 0 && (
+          {/* Bulk edit toolbar: visible when bulk mode is on */}
+          {bulkMode && (
             <div className="px-2 lg:px-0 mb-3">
-              <Card className="rounded-2xl border border-border bg-card py-0 shadow-sm">
+              <Card className="rounded-2xl border border-primary/30 bg-card py-0 shadow-sm">
                 <CardContent className="flex flex-wrap items-center gap-4 px-6 py-4">
-                  <span className="text-sm font-medium text-foreground">
-                    {selectedIds.size} selected
-                  </span>
-                  <Select
-                    key={bulkStatusKey}
-                    disabled={bulkLoading}
-                    onValueChange={async (status) => {
-                      if (!status || bulkLoading) return
-                      const ids = Array.from(selectedIds).map(Number)
-                      console.log('[BulkStatus] client: start', { ids, status })
-                      setBulkLoading(true)
-                      if (bulkTimeoutRef.current) clearTimeout(bulkTimeoutRef.current)
-                      bulkTimeoutRef.current = setTimeout(() => {
-                        console.log('[BulkStatus] client: timeout')
-                        setBulkLoading(false)
-                        bulkTimeoutRef.current = null
-                        alert('Update is taking too long. Please refresh the page.')
-                      }, 15000)
-                      try {
-                        const result = await bulkUpdateInvoiceStatus(ids, status)
-                        console.log('[BulkStatus] client: result', result)
-                        if (result.updated != null) {
-                          setSelectedIds(new Set())
-                          setBulkStatusKey((k) => k + 1)
-                          router.refresh()
-                        } else if (result.error) {
-                          console.error('[BulkStatus] client: error from server', result.error)
-                          alert(result.error)
-                        }
-                      } catch (e) {
-                        console.error('[BulkStatus] client: catch', e)
-                        alert(e instanceof Error ? e.message : 'Update failed')
-                      } finally {
-                        if (bulkTimeoutRef.current) {
-                          clearTimeout(bulkTimeoutRef.current)
-                          bulkTimeoutRef.current = null
-                        }
-                        setBulkLoading(false)
-                      }
-                    }}
-                  >
-                    <SelectTrigger className="h-9 w-[180px] rounded-lg border border-input bg-background text-xs font-medium">
-                      <SelectValue placeholder="Change status to…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled'] as const).map((s) => (
-                        <SelectItem key={s} value={s} className="text-sm">
-                          {STATUS_LABELS[s]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={bulkLoading}
-                    className="h-9 text-xs font-medium"
-                    onClick={() => setSelectedIds(new Set())}
-                  >
-                    Clear selection
-                  </Button>
-                  {bulkLoading && (
-                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Loader2 className="size-3.5 animate-spin" />
-                      Updating…
+                  <div className="flex items-center gap-2">
+                    <ListChecks className="size-4 text-primary" />
+                    <span className="text-sm font-semibold text-foreground">Bulk edit</span>
+                  </div>
+                  {selectedIds.size > 0 && (
+                    <span className="text-sm text-muted-foreground">
+                      {selectedIds.size} selected
                     </span>
                   )}
+                  {selectedIds.size > 0 && (
+                    <Select
+                      key={bulkStatusKey}
+                      disabled={bulkLoading}
+                      onValueChange={(status) => {
+                        if (!status || bulkLoading) return
+                        const ids = Array.from(selectedIds).map(Number)
+                        const count = ids.length
+                        const label = STATUS_LABELS[status] ?? status
+
+                        // Immediately exit bulk mode so user can keep working
+                        setBulkLoading(true)
+                        setSelectedIds(new Set())
+                        setBulkStatusKey((k) => k + 1)
+                        setBulkMode(false)
+
+                        toast.promise(
+                          bulkUpdateInvoiceStatus(ids, status).then((result) => {
+                            if (result.error) throw new Error(result.error)
+                            router.refresh()
+                            return result
+                          }),
+                          {
+                            loading: `Updating ${count} invoices to "${label}"…`,
+                            success: (result) => `${result.updated} invoices updated to "${label}"`,
+                            error: (err: Error) => err.message || 'Bulk update failed',
+                            finally: () => setBulkLoading(false),
+                          }
+                        )
+                      }}
+                    >
+                      <SelectTrigger className="h-9 w-[180px] rounded-lg border border-input bg-background text-xs font-medium">
+                        <SelectValue placeholder="Change status to…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled'] as const).map((s) => (
+                          <SelectItem key={s} value={s} className="text-sm">
+                            {STATUS_LABELS[s]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {selectedIds.size === 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      Tap checkboxes to select invoices
+                    </span>
+                  )}
+                  <div className="ml-auto flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 text-xs font-medium"
+                      onClick={() => {
+                        setBulkMode(false)
+                        setSelectedIds(new Set())
+                      }}
+                    >
+                      Done
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -795,71 +812,112 @@ export function InvoicesPageClient({
           <div className="space-y-3 px-2 lg:px-0">
             {filteredInvoices.length > 0 ? (
               <>
-                {/* Select all on page — only when at least one is selected */}
-                {selectedIds.size > 0 && (
-                  <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-5 py-3 lg:px-6 lg:py-3">
-                    <Checkbox
-                      id="select-all-invoices"
-                      className="shrink-0"
-                      checked={
-                        filteredInvoices.length > 0 &&
-                        filteredInvoices.every((inv) => selectedIds.has(String(inv.id)))
-                      }
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedIds((prev) => {
-                            const next = new Set(prev)
-                            filteredInvoices.forEach((inv) => next.add(String(inv.id)))
-                            return next
+                {/* Select all on page / Select all invoices — only in bulk mode */}
+                {bulkMode && (
+                  <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card px-5 py-3 lg:px-6 lg:py-3">
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        id="select-all-page"
+                        className="shrink-0"
+                        checked={
+                          filteredInvoices.length > 0 &&
+                          filteredInvoices.every((inv) => selectedIds.has(String(inv.id)))
+                        }
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedIds(new Set(filteredInvoices.map((inv) => String(inv.id))))
+                          } else {
+                            setSelectedIds(new Set())
+                          }
+                        }}
+                      />
+                      <label
+                        htmlFor="select-all-page"
+                        className="text-sm font-medium text-muted-foreground cursor-pointer select-none"
+                      >
+                        Select all on page ({filteredInvoices.length})
+                      </label>
+                    </div>
+                    <div className="h-4 w-px bg-border" />
+                    <button
+                      type="button"
+                      disabled={selectAllLoading}
+                      className="text-sm font-medium text-primary hover:underline disabled:opacity-50 flex items-center gap-2"
+                      onClick={async () => {
+                        setSelectAllLoading(true)
+                        try {
+                          const result = await getAllInvoiceIds({
+                            status: filterStatus || undefined,
+                            clientId: filterClientId || undefined,
                           })
-                        } else {
-                          setSelectedIds((prev) => {
-                            const next = new Set(prev)
-                            filteredInvoices.forEach((inv) => next.delete(String(inv.id)))
-                            return next
-                          })
+                          if ('ids' in result) {
+                            setSelectedIds(new Set(result.ids.map(String)))
+                          } else if (result.error) {
+                            alert(result.error)
+                          }
+                        } finally {
+                          setSelectAllLoading(false)
                         }
                       }}
-                    />
-                    <label
-                      htmlFor="select-all-invoices"
-                      className="text-sm font-medium text-muted-foreground cursor-pointer select-none"
                     >
-                      Select all on page
-                    </label>
+                      {selectAllLoading ? (
+                        <>
+                          <Loader2 className="size-3.5 animate-spin" />
+                          Loading…
+                        </>
+                      ) : (
+                        `Select all invoices${totalDocsProp > 0 ? ` (${totalDocsProp})` : ''}`
+                      )}
+                    </button>
                   </div>
                 )}
               {filteredInvoices.map((inv) => {
                 const client = getClientForInvoice(inv)
                 const status = (inv.status ?? 'draft') as string
                 return (
-                  <Link
+                  <div
                     key={inv.id}
-                    href={`/dashboard/invoices/${inv.id}`}
-                    className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-border bg-card p-5 transition-colors hover:bg-accent/50 active:bg-accent/70 lg:p-6 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                    className="flex items-center gap-3"
                   >
-                    <div className="flex min-w-0 flex-1 items-center gap-4">
-                      <div
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
+                    {bulkMode && (
+                      <Checkbox
+                        className="size-5 shrink-0"
+                        checked={selectedIds.has(String(inv.id))}
+                        onCheckedChange={(checked) => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev)
+                            if (checked) next.add(String(inv.id))
+                            else next.delete(String(inv.id))
+                            return next
+                          })
                         }}
-                        className="shrink-0"
-                      >
-                        <Checkbox
-                          className="size-4"
-                          checked={selectedIds.has(String(inv.id))}
-                          onCheckedChange={(checked) => {
-                            setSelectedIds((prev) => {
-                              const next = new Set(prev)
-                              if (checked) next.add(String(inv.id))
-                              else next.delete(String(inv.id))
-                              return next
-                            })
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
+                      />
+                    )}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      className="flex flex-1 cursor-pointer items-center justify-between gap-4 rounded-2xl border border-border bg-card p-5 transition-colors hover:bg-accent/50 active:bg-accent/70 lg:p-6 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                      onClick={() => {
+                        if (bulkMode) {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev)
+                            const id = String(inv.id)
+                            if (next.has(id)) next.delete(id)
+                            else next.add(id)
+                            return next
+                          })
+                        } else {
+                          router.push(`/dashboard/invoices/${inv.id}`)
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          if (!bulkMode) router.push(`/dashboard/invoices/${inv.id}`)
+                        }
+                      }}
+                    >
+                      <div className="flex min-w-0 flex-1 items-center gap-4">
                       <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-border bg-muted font-medium text-foreground">
                         {invoiceBadgeNumber(inv)}
                       </div>
@@ -915,7 +973,8 @@ export function InvoicesPageClient({
                         </button>
                       </div>
                     </div>
-                  </Link>
+                  </div>
+                  </div>
                 )
               })}
               </>

@@ -61,26 +61,56 @@ export type ResetPasswordResponse = {
 
 // Auth Actions
 
+/** Decode JWT payload (middle segment) to read iat without verifying (used only for session invalidation). */
+function getTokenIat(token: string): number | null {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+    const payload = JSON.parse(
+      Buffer.from(parts[1], 'base64url').toString('utf8'),
+    ) as { iat?: number }
+    return typeof payload.iat === 'number' ? payload.iat : null
+  } catch {
+    return null
+  }
+}
+
 /**
- * Get the currently authenticated user
- * @returns The authenticated user or null if not authenticated
+ * Get the currently authenticated user.
+ * Enforces single session per email: if this token was issued before the user's last login, returns null (other device logged in).
  */
 export async function getUser(): Promise<User | null> {
   try {
     const headers = await getHeaders()
-    const payload: Payload = await getPayload({ config: await configPromise })
+    const cookieStore = await cookies()
+    const token = cookieStore.get('payload-token')?.value
 
+    const payload: Payload = await getPayload({ config: await configPromise })
     const { user } = await payload.auth({ headers })
-    return user || null
-  } catch (error) {
-    console.error('Error getting user:', error)
-    // Clear invalid/expired token so it isn't sent on every request and can cause redirect loops
-    try {
-      const cookieStore = await cookies()
-      cookieStore.delete('payload-token')
-    } catch {
-      // ignore
+
+    if (!user) return null
+
+    // Single session per email: if a *different* login happened after this token was issued, invalidate.
+    // Grace period of 10 seconds so the token issued during the same login flow isn't invalidated
+    // by its own lastLoginAt (which is set milliseconds after the token is created).
+    const GRACE_MS = 10_000
+    const lastLoginAt = user.lastLoginAt
+    if (lastLoginAt && token) {
+      const iat = getTokenIat(token)
+      if (iat != null) {
+        const lastLoginMs = new Date(lastLoginAt).getTime()
+        const tokenIssuedMs = iat * 1000
+        if (lastLoginMs - tokenIssuedMs > GRACE_MS) {
+          redirect('/api/auth/clear-stale?next=/login')
+        }
+      }
     }
+
+    return user as User
+  } catch (error) {
+    const err = error as { digest?: string }
+    if (err?.digest?.startsWith('NEXT_REDIRECT')) throw error
+    console.error('Error getting user:', error)
     return null
   }
 }
@@ -115,7 +145,14 @@ export async function loginUser({
         data: { email, password },
       })
 
-      if (result.token) {
+      if (result.token && result.user?.id) {
+        // Single session per email: invalidate any other session by updating lastLoginAt
+        await payload.update({
+          collection: 'users',
+          id: result.user.id,
+          data: { lastLoginAt: new Date() },
+        })
+
         const cookieStore = await cookies()
 
         // Calculate expiration date based on rememberMe flag

@@ -148,6 +148,7 @@ export function InvoiceDetailClient({ invoice, client, business, deliveredBy, pr
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [downloadPdfLoading, setDownloadPdfLoading] = useState(false)
+  const [printPdfLoading, setPrintPdfLoading] = useState(false)
 
   const items = invoice.items ?? []
   const subtotal = invoice.subtotal ?? items.reduce((acc, i) => acc + (i.quantity ?? 0) * (i.rate ?? 0), 0)
@@ -212,6 +213,19 @@ export function InvoiceDetailClient({ invoice, client, business, deliveredBy, pr
     }
   }
 
+  const handlePrintPdf = () => {
+    setPrintPdfLoading(true)
+    try {
+      const printUrl = `/api/invoices/${invoice.id}/pdf?inline=1`
+      const opened = window.open(printUrl, '_blank', 'noopener,noreferrer')
+      if (!opened) {
+        window.location.href = printUrl
+      }
+    } finally {
+      setPrintPdfLoading(false)
+    }
+  }
+
   const handleDelete = async () => {
     setDeleteLoading(true)
     const result = await deleteInvoice(Number(invoice.id))
@@ -257,9 +271,15 @@ export function InvoiceDetailClient({ invoice, client, business, deliveredBy, pr
             <Mail className="size-4" />
             Send Invoice
           </Button>
-          <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrintPdf}
+            disabled={printPdfLoading}
+            className="gap-2"
+          >
             <Printer className="size-4" />
-            Print
+            {printPdfLoading ? 'Opening PDF...' : 'Print'}
           </Button>
           <Select value={status} onValueChange={handleStatusChange} disabled={statusSaving}>
             <SelectTrigger className="w-[120px]">

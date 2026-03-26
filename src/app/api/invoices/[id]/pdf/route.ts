@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { generateInvoicePdfBuffer } from '@/lib/generate-invoice-pdf'
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
@@ -17,11 +17,13 @@ export async function GET(
   }
 
   const { buffer, filename } = result
+  const { searchParams } = new URL(req.url)
+  const isInline = searchParams.get('inline') === '1'
   return new NextResponse(buffer, {
     status: 200,
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Disposition': `${isInline ? 'inline' : 'attachment'}; filename="${filename}"`,
       'Content-Length': String(buffer.length),
     },
   })

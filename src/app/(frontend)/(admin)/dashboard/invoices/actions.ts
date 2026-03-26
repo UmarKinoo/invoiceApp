@@ -113,34 +113,68 @@ const LOG = (msg: string, ...args: unknown[]) => {
   console.error(`[BulkStatus] ${msg}`, ...args)
 }
 
+const MAX_SELECT_ALL = 2000
+
+/** Return all invoice IDs matching optional filters (for "Select all invoices"). */
+export async function getAllInvoiceIds(filters?: {
+  status?: string
+  clientId?: string
+}): Promise<{ ids: number[]; total?: number } | { error: string }> {
+  try {
+    const payload = await getPayloadClient()
+    const where: Record<string, unknown> = {}
+    if (filters?.status && VALID_STATUSES.includes(filters.status as (typeof VALID_STATUSES)[number])) {
+      where.status = { equals: filters.status }
+    }
+    if (filters?.clientId) {
+      const id = parseInt(filters.clientId, 10)
+      if (Number.isFinite(id)) where.client = { equals: id }
+    }
+    const res = await payload.find({
+      collection: 'invoices',
+      where: Object.keys(where).length ? where : undefined,
+      limit: MAX_SELECT_ALL,
+      depth: 0,
+      pagination: false,
+    })
+    const ids = (res.docs ?? []).map((d: { id: number }) => d.id)
+    const total = (res as { totalDocs?: number }).totalDocs
+    return { ids, total }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e)
+    return { error: message }
+  }
+}
+
 type InvoiceStatus = (typeof VALID_STATUSES)[number]
+
+const BATCH_SIZE = 50
 
 export async function bulkUpdateInvoiceStatus(
   ids: number[],
   status: string
 ): Promise<{ updated?: number; error?: string }> {
-  LOG('start', { ids, status })
-  if (ids.length === 0) {
-    LOG('early return: no ids')
-    return { updated: 0 }
-  }
+  LOG('start', { count: ids.length, status })
+  if (ids.length === 0) return { updated: 0 }
   if (!VALID_STATUSES.includes(status as InvoiceStatus)) {
-    LOG('invalid status', status)
     return { error: 'Invalid status' }
   }
   const statusVal = status as InvoiceStatus
   try {
-    LOG('getPayloadClient...')
     const payload = await getPayloadClient()
-    LOG('getPayloadClient done')
     let updated = 0
-    for (const id of ids) {
-      LOG('payload.update id=%s status=%s', id, status)
-      await payload.update({ collection: 'invoices', id, data: { status: statusVal } })
-      updated += 1
-      LOG('payload.update done for id=%s', id)
+
+    // Process in batches using Payload's where clause (one DB call per batch)
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      const batch = ids.slice(i, i + BATCH_SIZE)
+      const result = await payload.update({
+        collection: 'invoices',
+        where: { id: { in: batch } },
+        data: { status: statusVal },
+      })
+      updated += (result.docs ?? []).length
     }
-    LOG('revalidatePath...')
+
     revalidatePath('/dashboard/invoices')
     revalidatePath('/dashboard')
     revalidatePath('/dashboard/transactions')
