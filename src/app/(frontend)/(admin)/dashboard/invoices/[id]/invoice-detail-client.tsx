@@ -217,10 +217,7 @@ export function InvoiceDetailClient({ invoice, client, business, deliveredBy, pr
     setPrintPdfLoading(true)
     try {
       const printUrl = `/api/invoices/${invoice.id}/pdf?inline=1`
-      const opened = window.open(printUrl, '_blank', 'noopener,noreferrer')
-      if (!opened) {
-        window.location.href = printUrl
-      }
+      window.open(printUrl, '_blank')
     } finally {
       setPrintPdfLoading(false)
     }

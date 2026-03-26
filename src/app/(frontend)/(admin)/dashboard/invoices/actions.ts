@@ -122,7 +122,7 @@ export async function getAllInvoiceIds(filters?: {
 }): Promise<{ ids: number[]; total?: number } | { error: string }> {
   try {
     const payload = await getPayloadClient()
-    const where: Record<string, unknown> = {}
+    const where: Parameters<Awaited<ReturnType<typeof getPayloadClient>>['find']>[0]['where'] = {}
     if (filters?.status && VALID_STATUSES.includes(filters.status as (typeof VALID_STATUSES)[number])) {
       where.status = { equals: filters.status }
     }
@@ -132,7 +132,7 @@ export async function getAllInvoiceIds(filters?: {
     }
     const res = await payload.find({
       collection: 'invoices',
-      where: Object.keys(where).length ? where : undefined,
+      where: where && Object.keys(where).length > 0 ? where : undefined,
       limit: MAX_SELECT_ALL,
       depth: 0,
       pagination: false,

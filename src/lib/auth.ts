@@ -150,7 +150,7 @@ export async function loginUser({
         await payload.update({
           collection: 'users',
           id: result.user.id,
-          data: { lastLoginAt: new Date() },
+          data: { lastLoginAt: new Date().toISOString() },
         })
 
         const cookieStore = await cookies()
