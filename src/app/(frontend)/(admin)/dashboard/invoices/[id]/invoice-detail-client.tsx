@@ -88,6 +88,8 @@ type InvoiceDetailClientProps = {
     name?: string | null
     company?: string | null
     email?: string | null
+    vatNumber?: string | null
+    brn?: string | null
     address?: string | null
   } | null
   business: {
@@ -380,6 +382,12 @@ export function InvoiceDetailClient({ invoice, client, business, deliveredBy, pr
               <p className="text-base font-semibold text-foreground">{client?.name ?? '—'}</p>
               {client?.company && (
                 <p className="text-sm text-muted-foreground mt-0.5">{client.company}</p>
+              )}
+              {client?.brn && (
+                <p className="text-sm text-muted-foreground mt-0.5">BRN {client.brn}</p>
+              )}
+              {client?.vatNumber && (
+                <p className="text-sm text-muted-foreground mt-0.5">VAT {client.vatNumber}</p>
               )}
               {client?.email && (
                 <p className="text-sm text-muted-foreground mt-0.5">{client.email}</p>

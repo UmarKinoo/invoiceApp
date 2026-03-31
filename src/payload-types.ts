@@ -199,12 +199,16 @@ export interface Client {
   id: number;
   name: string;
   company?: string | null;
-  email: string;
-  phone?: string | null;
+  email?: string | null;
+  phone: string;
   /**
    * Business Registration Number (if applicable)
    */
   brn?: string | null;
+  /**
+   * Optional. Shown on invoices if present.
+   */
+  vatNumber?: string | null;
   address?: string | null;
   /**
    * Tags for filtering
@@ -534,6 +538,7 @@ export interface ClientsSelect<T extends boolean = true> {
   email?: T;
   phone?: T;
   brn?: T;
+  vatNumber?: T;
   address?: T;
   tags?:
     | T

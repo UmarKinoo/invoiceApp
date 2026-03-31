@@ -15,9 +15,18 @@ export const Clients: CollectionConfig = {
   fields: [
     { name: 'name', type: 'text', required: true },
     { name: 'company', type: 'text' },
-    { name: 'email', type: 'email', required: true },
-    { name: 'phone', type: 'text' },
+    // Email optional: some contacts might only have phone or VAT/BRN.
+    { name: 'email', type: 'email' },
+    { name: 'phone', type: 'text', required: true },
     { name: 'brn', type: 'text', admin: { description: 'Business Registration Number (if applicable)' } },
+    {
+      name: 'vatNumber',
+      type: 'text',
+      admin: {
+        label: 'VAT number',
+        description: 'Optional. Shown on invoices if present.',
+      },
+    },
     { name: 'address', type: 'textarea' },
     {
       name: 'tags',

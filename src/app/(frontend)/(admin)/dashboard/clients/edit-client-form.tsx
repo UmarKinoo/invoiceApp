@@ -14,18 +14,28 @@ export function EditClientForm({ client }: { client: Client }) {
     company: client.company ?? '',
     email: client.email ?? '',
     phone: client.phone ?? '',
+    brn: (client as { brn?: string | null }).brn ?? '',
+    vatNumber: (client as { vatNumber?: string | null }).vatNumber ?? '',
     address: client.address ?? '',
   })
+  const [errors, setErrors] = useState<{ name?: string; phone?: string }>({})
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.name || !form.email) return
+    const nextErrors: { name?: string; phone?: string } = {}
+    if (!form.name.trim()) nextErrors.name = 'Name is required'
+    if (!form.phone.trim()) nextErrors.phone = 'Phone is required'
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) return
+
     setStatus('loading')
     const result = await updateClient(client.id, {
-      name: form.name,
+      name: form.name.trim(),
       company: form.company || undefined,
-      email: form.email,
+      email: form.email || undefined,
       phone: form.phone || undefined,
+      brn: form.brn || undefined,
+      vatNumber: form.vatNumber || undefined,
       address: form.address || undefined,
     })
     if (result.doc) {
@@ -40,23 +50,82 @@ export function EditClientForm({ client }: { client: Client }) {
     <form onSubmit={handleSubmit} className="max-w-2xl rounded-2xl border border-border bg-card p-6 lg:p-8">
       <h3 className="mb-6 text-lg font-semibold uppercase tracking-tight text-foreground">Edit client</h3>
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:gap-6">
-        {[
-          { key: 'name', label: 'Name', placeholder: 'Full Name' },
-          { key: 'company', label: 'Company', placeholder: 'Company Name' },
-          { key: 'email', label: 'Email', placeholder: 'email@provider.com', type: 'email' },
-          { key: 'phone', label: 'Phone', placeholder: '+1 (000) 000-0000', type: 'tel' },
-        ].map(({ key, label, placeholder, type = 'text' }) => (
-          <div key={key} className="space-y-1">
-            <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</label>
-            <input
-              type={type}
-              placeholder={placeholder}
-              className="w-full rounded-xl border border-input bg-background px-5 py-3.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              value={form[key as keyof typeof form]}
-              onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
-            />
-          </div>
-        ))}
+        <div className="space-y-1">
+          <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Name <span className="text-destructive">*</span>
+          </label>
+          <input
+            type="text"
+            placeholder="Full Name"
+            className={`w-full rounded-xl border bg-background px-5 py-3.5 text-sm text-foreground focus:outline-none focus:ring-2 ${
+              errors.name ? 'border-destructive focus:ring-destructive' : 'border-input focus:ring-ring'
+            }`}
+            value={form.name}
+            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+          />
+          {errors.name && <p className="px-2 text-xs text-destructive">{errors.name}</p>}
+        </div>
+        <div className="space-y-1">
+          <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Company</label>
+          <input
+            type="text"
+            placeholder="Company Name"
+            className="w-full rounded-xl border border-input bg-background px-5 py-3.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            value={form.company}
+            onChange={(e) => setForm((p) => ({ ...p, company: e.target.value }))}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Phone <span className="text-destructive">*</span>
+          </label>
+          <input
+            type="tel"
+            placeholder="+1 (000) 000-0000"
+            className={`w-full rounded-xl border bg-background px-5 py-3.5 text-sm text-foreground focus:outline-none focus:ring-2 ${
+              errors.phone ? 'border-destructive focus:ring-destructive' : 'border-input focus:ring-ring'
+            }`}
+            value={form.phone}
+            onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+          />
+          {errors.phone && <p className="px-2 text-xs text-destructive">{errors.phone}</p>}
+        </div>
+        <div className="space-y-1">
+          <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Email (optional)
+          </label>
+          <input
+            type="email"
+            placeholder="email@provider.com"
+            className="w-full rounded-xl border border-input bg-background px-5 py-3.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            value={form.email}
+            onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+          />
+        </div>
+        <div className="space-y-1 md:col-span-2">
+          <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            BRN (optional)
+          </label>
+          <input
+            type="text"
+            placeholder="Business Registration Number"
+            className="w-full rounded-xl border border-input bg-background px-5 py-3.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            value={form.brn}
+            onChange={(e) => setForm((p) => ({ ...p, brn: e.target.value }))}
+          />
+        </div>
+        <div className="space-y-1 md:col-span-2">
+          <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            VAT number (optional)
+          </label>
+          <input
+            type="text"
+            placeholder="Only if VAT registered"
+            className="w-full rounded-xl border border-input bg-background px-5 py-3.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            value={form.vatNumber}
+            onChange={(e) => setForm((p) => ({ ...p, vatNumber: e.target.value }))}
+          />
+        </div>
       </div>
       <div className="mb-6 space-y-1">
         <label className="px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Address</label>

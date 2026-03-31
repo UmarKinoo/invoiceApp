@@ -274,6 +274,7 @@ type InvoicePdfDocumentProps = {
     name?: string | null
     company?: string | null
     brn?: string | null
+    vatNumber?: string | null
     email?: string | null
   } | null
   business: {
@@ -359,6 +360,9 @@ export function InvoicePdfDocument({
             ) : null}
             {client?.brn ? (
               <Text style={styles.clientMeta}>BRN: {client.brn}</Text>
+            ) : null}
+            {client?.vatNumber ? (
+              <Text style={styles.clientMeta}>VAT: {client.vatNumber}</Text>
             ) : null}
             {client?.email ? <Text style={styles.clientMeta}>{client.email}</Text> : null}
           </View>

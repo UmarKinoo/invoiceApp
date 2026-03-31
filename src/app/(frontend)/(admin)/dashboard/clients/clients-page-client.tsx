@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { Download, Plus, Mail, Phone, Pencil, Trash2, Search } from 'lucide-react'
 import { createClient, deleteClient } from './actions'
+import { toast } from 'sonner'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -69,8 +70,10 @@ export function ClientsPageClient({
     email: '',
     phone: '',
     brn: '',
+    vatNumber: '',
     address: '',
   })
+  const [errors, setErrors] = useState<{ name?: string; phone?: string }>({})
 
   const handleDeleteClient = async () => {
     if (!deleteClientId) return
@@ -84,18 +87,26 @@ export function ClientsPageClient({
   }
 
   const handleAdd = async () => {
-    if (!newClient.name || !newClient.email) return
+    const nextErrors: { name?: string; phone?: string } = {}
+    if (!newClient.name.trim()) nextErrors.name = 'Full name is required'
+    if (!newClient.phone.trim()) nextErrors.phone = 'Phone is required'
+    setErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0) return
+
     const result = await createClient({
-      name: newClient.name,
+      name: newClient.name.trim(),
       company: newClient.company || undefined,
-      email: newClient.email,
+      email: newClient.email || undefined,
       phone: newClient.phone || undefined,
       brn: newClient.brn || undefined,
+      vatNumber: newClient.vatNumber || undefined,
       address: newClient.address || undefined,
     })
     if (result.doc) {
       setShowAdd(false)
-      setNewClient({ name: '', company: '', email: '', phone: '', brn: '', address: '' })
+      setNewClient({ name: '', company: '', email: '', phone: '', brn: '', vatNumber: '', address: '' })
+      setErrors({})
+      toast.success('Contact saved')
       router.refresh()
     }
   }
@@ -130,12 +141,16 @@ export function ClientsPageClient({
             </h3>
             <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:mb-8 lg:gap-6">
               <div className="space-y-2">
-                <Label>Full name</Label>
+                <Label>
+                  Full name <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   placeholder="Full Name"
                   value={newClient.name}
                   onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
+                  className={errors.name ? 'border-destructive focus-visible:ring-destructive' : ''}
                 />
+                {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
               </div>
               <div className="space-y-2">
                 <Label>Company</Label>
@@ -146,7 +161,7 @@ export function ClientsPageClient({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Email</Label>
+                <Label>Email (optional)</Label>
                 <Input
                   type="email"
                   placeholder="email@provider.com"
@@ -155,13 +170,17 @@ export function ClientsPageClient({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Phone</Label>
+                <Label>
+                  Phone <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   type="tel"
                   placeholder="+1 (000) 000-0000"
                   value={newClient.phone}
                   onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
+                  className={errors.phone ? 'border-destructive focus-visible:ring-destructive' : ''}
                 />
+                {errors.phone && <p className="text-xs text-destructive">{errors.phone}</p>}
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label>BRN (Business Registration Number)</Label>
@@ -170,6 +189,15 @@ export function ClientsPageClient({
                   placeholder="Optional — if they have one"
                   value={newClient.brn}
                   onChange={(e) => setNewClient({ ...newClient, brn: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label>VAT number (optional)</Label>
+                <Input
+                  type="text"
+                  placeholder="Only if they are VAT registered"
+                  value={newClient.vatNumber}
+                  onChange={(e) => setNewClient({ ...newClient, vatNumber: e.target.value })}
                 />
               </div>
             </div>

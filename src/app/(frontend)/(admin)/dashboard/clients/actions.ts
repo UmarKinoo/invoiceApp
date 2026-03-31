@@ -6,10 +6,11 @@ import { revalidatePath } from 'next/cache'
 export type CreateClientInput = {
   name: string
   company?: string
-  email: string
+  email?: string
   phone?: string
   address?: string
   brn?: string
+  vatNumber?: string
 }
 
 export async function createClient(
@@ -22,10 +23,11 @@ export async function createClient(
       data: {
         name: data.name,
         company: data.company ?? undefined,
-        email: data.email,
+        email: data.email ?? undefined,
         phone: data.phone ?? undefined,
         address: data.address ?? undefined,
         brn: data.brn ?? undefined,
+        vatNumber: data.vatNumber ?? undefined,
       },
     })
     revalidatePath('/dashboard/clients')
@@ -51,6 +53,7 @@ export async function updateClient(
         ...(data.phone != null && { phone: data.phone }),
         ...(data.address != null && { address: data.address }),
         ...(data.brn != null && { brn: data.brn }),
+        ...(data.vatNumber != null && { vatNumber: data.vatNumber }),
       },
     })
     revalidatePath('/dashboard/clients')
