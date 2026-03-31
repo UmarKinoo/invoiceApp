@@ -42,6 +42,7 @@ export async function generateInvoicePdfBuffer(
     ? {
         name: client.name ?? null,
         company: client.company ?? null,
+        brn: (client as { brn?: string | null }).brn ?? null,
         email: 'email' in client ? client.email ?? null : null,
       }
     : null

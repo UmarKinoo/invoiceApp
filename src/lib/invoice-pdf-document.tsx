@@ -89,6 +89,11 @@ const styles = StyleSheet.create({
     fontSize: 9,
     marginBottom: 2,
   },
+  clientMeta: {
+    color: '#6b7280',
+    fontSize: 9,
+    marginBottom: 2,
+  },
   contentArea: {
     flexGrow: 1,
     minHeight: 80,
@@ -268,6 +273,7 @@ type InvoicePdfDocumentProps = {
   client: {
     name?: string | null
     company?: string | null
+    brn?: string | null
     email?: string | null
   } | null
   business: {
@@ -348,8 +354,13 @@ export function InvoicePdfDocument({
           <View style={styles.billToBlock}>
             <Text style={styles.label}>Bill to</Text>
             <Text style={styles.clientName}>{client?.name ?? '—'}</Text>
-            <Text style={styles.clientCompany}>{client?.company ?? '—'}</Text>
-            {client?.email ? <Text style={styles.clientCompany}>{client.email}</Text> : null}
+            {client?.company ? (
+              <Text style={styles.clientCompany}>{client.company}</Text>
+            ) : null}
+            {client?.brn ? (
+              <Text style={styles.clientMeta}>BRN: {client.brn}</Text>
+            ) : null}
+            {client?.email ? <Text style={styles.clientMeta}>{client.email}</Text> : null}
           </View>
         </View>
 
