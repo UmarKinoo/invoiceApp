@@ -20,6 +20,7 @@ export async function createClient(
     const payload = await getPayloadClient()
     const doc = await payload.create({
       collection: 'clients',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       data: {
         name: data.name,
         company: data.company ?? undefined,
@@ -28,7 +29,7 @@ export async function createClient(
         address: data.address ?? undefined,
         brn: data.brn ?? undefined,
         vatNumber: data.vatNumber ?? undefined,
-      },
+      } as any,
     })
     revalidatePath('/dashboard/clients')
     return { doc: { id: doc.id as number } }
@@ -46,6 +47,7 @@ export async function updateClient(
     await payload.update({
       collection: 'clients',
       id,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       data: {
         ...(data.name != null && { name: data.name }),
         ...(data.company != null && { company: data.company }),
@@ -54,7 +56,7 @@ export async function updateClient(
         ...(data.address != null && { address: data.address }),
         ...(data.brn != null && { brn: data.brn }),
         ...(data.vatNumber != null && { vatNumber: data.vatNumber }),
-      },
+      } as any,
     })
     revalidatePath('/dashboard/clients')
     revalidatePath(`/dashboard/clients/${id}`)

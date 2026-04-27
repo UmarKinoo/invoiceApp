@@ -22,8 +22,8 @@ export const Clients: CollectionConfig = {
     {
       name: 'vatNumber',
       type: 'text',
+      label: 'VAT number',
       admin: {
-        label: 'VAT number',
         description: 'Optional. Shown on invoices if present.',
       },
     },
