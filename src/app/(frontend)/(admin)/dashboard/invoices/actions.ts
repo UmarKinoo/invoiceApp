@@ -59,8 +59,11 @@ export async function createInvoice(data: {
     revalidatePath('/dashboard/invoices')
     return { doc: { id: doc.id as number } }
   } catch (err: unknown) {
-    const payloadErr = err as { errors?: { message: string }[] }
-    return { errors: payloadErr?.errors ?? [{ message: 'Failed to create invoice' }] }
+    console.error('[createInvoice] failed', err)
+    const payloadErr = err as { errors?: { message: string }[]; message?: string }
+    if (payloadErr?.errors?.length) return { errors: payloadErr.errors }
+    const message = payloadErr?.message ?? (err instanceof Error ? err.message : 'Failed to create invoice')
+    return { errors: [{ message }] }
   }
 }
 
@@ -91,8 +94,11 @@ export async function updateInvoice(
     revalidatePath(`/dashboard/invoices/${id}`)
     return { doc: { id } }
   } catch (err: unknown) {
-    const payloadErr = err as { errors?: { message: string }[] }
-    return { errors: payloadErr?.errors ?? [{ message: 'Failed to update invoice' }] }
+    console.error('[updateInvoice] failed', { id, err })
+    const payloadErr = err as { errors?: { message: string }[]; message?: string }
+    if (payloadErr?.errors?.length) return { errors: payloadErr.errors }
+    const message = payloadErr?.message ?? (err instanceof Error ? err.message : 'Failed to update invoice')
+    return { errors: [{ message }] }
   }
 }
 
