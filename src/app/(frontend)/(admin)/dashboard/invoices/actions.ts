@@ -52,19 +52,55 @@ export async function createInvoice(data: {
   tax: number
   total: number
 }): Promise<{ doc?: { id: number }; errors?: { message: string }[] }> {
-  try {
-    const payload = await getPayloadClient()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const doc = await payload.create({ collection: 'invoices', data: data as any })
-    revalidatePath('/dashboard/invoices')
-    return { doc: { id: doc.id as number } }
-  } catch (err: unknown) {
-    console.error('[createInvoice] failed', err)
-    const payloadErr = err as { errors?: { message: string }[]; message?: string }
-    if (payloadErr?.errors?.length) return { errors: payloadErr.errors }
-    const message = payloadErr?.message ?? (err instanceof Error ? err.message : 'Failed to create invoice')
-    return { errors: [{ message }] }
+  const payload = await getPayloadClient()
+  let attempt = 0
+  let invoiceNumber = data.invoiceNumber
+  while (attempt < 10) {
+    try {
+      const doc = await payload.create({
+        collection: 'invoices',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        data: { ...data, invoiceNumber } as any,
+      })
+      revalidatePath('/dashboard/invoices')
+      return { doc: { id: doc.id as number } }
+    } catch (err: unknown) {
+      const isInvoiceNumberConflict = (() => {
+        const e = err as { data?: { errors?: { path?: string }[] }; message?: string }
+        if (e?.data?.errors?.some((x) => x?.path === 'invoiceNumber')) return true
+        const msg = e?.message ?? ''
+        return /invoiceNumber/i.test(msg) && /(unique|invalid|duplicate)/i.test(msg)
+      })()
+      if (isInvoiceNumberConflict && attempt < 9) {
+        attempt += 1
+        const settings = await payload.findGlobal({ slug: 'settings' })
+        const prefix = (settings?.invoicePrefix as string) ?? 'INV-'
+        const all = await payload.find({
+          collection: 'invoices',
+          limit: 5000,
+          depth: 0,
+          pagination: false,
+          where: { invoiceNumber: { like: `${prefix}%` } },
+        })
+        const maxNum = Math.max(
+          1000,
+          ...all.docs.map((inv: { invoiceNumber?: string | null }) => {
+            const n = (inv.invoiceNumber ?? '').slice(prefix.length)
+            const m = n.match(/^\d+/)
+            return m ? parseInt(m[0], 10) : 1000
+          })
+        )
+        invoiceNumber = `${prefix}${maxNum + 1}`
+        continue
+      }
+      console.error('[createInvoice] failed', err)
+      const payloadErr = err as { errors?: { message: string }[]; message?: string }
+      if (payloadErr?.errors?.length) return { errors: payloadErr.errors }
+      const message = payloadErr?.message ?? (err instanceof Error ? err.message : 'Failed to create invoice')
+      return { errors: [{ message }] }
+    }
   }
+  return { errors: [{ message: 'Could not allocate a unique invoice number after retries' }] }
 }
 
 export async function updateInvoice(
