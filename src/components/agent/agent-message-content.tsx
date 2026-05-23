@@ -22,14 +22,19 @@ function ChatLinkButton({ label, href }: { label: string; href: string }) {
 
   if (internal) {
     return (
-      <Button asChild size="sm" className="mt-2 h-8 gap-1.5">
+      <Button asChild size="sm" className="mt-2 h-10 w-full max-w-full gap-1.5 touch-manipulation sm:h-8 sm:w-auto">
         <Link href={path}>{label}</Link>
       </Button>
     )
   }
 
   return (
-    <Button asChild size="sm" variant="secondary" className="mt-2 h-8 gap-1.5">
+    <Button
+      asChild
+      size="sm"
+      variant="secondary"
+      className="mt-2 h-10 w-full max-w-full gap-1.5 touch-manipulation sm:h-8 sm:w-auto"
+    >
       <a href={href} target="_blank" rel="noopener noreferrer">
         {label}
         <ExternalLink className="size-3.5 opacity-70" aria-hidden />

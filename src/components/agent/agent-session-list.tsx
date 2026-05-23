@@ -16,6 +16,7 @@ type Props = {
   activeId: string | null
   loading: boolean
   disabled?: boolean
+  className?: string
   onSelect: (id: string) => void
   onNewChat: () => void
   onHide?: () => void
@@ -43,6 +44,7 @@ export function AgentSessionList({
   activeId,
   loading,
   disabled,
+  className,
   onSelect,
   onNewChat,
   onHide,
@@ -50,7 +52,10 @@ export function AgentSessionList({
   return (
     <div
       data-testid="agent-chats-panel"
-      className="flex h-full min-h-0 w-56 shrink-0 flex-col overflow-hidden border-r border-border"
+      className={cn(
+        'flex h-full min-h-0 w-56 shrink-0 flex-col overflow-hidden border-r border-border',
+        className,
+      )}
     >
       <div className="shrink-0 space-y-2 border-b border-border p-2">
         <div className="flex items-center justify-between gap-1 px-0.5">
@@ -101,8 +106,8 @@ export function AgentSessionList({
               disabled={disabled}
               onClick={() => onSelect(s.id)}
               className={cn(
-                'w-full rounded-lg px-2.5 py-2 text-left text-sm transition-colors',
-                'hover:bg-muted disabled:opacity-50',
+                'w-full rounded-lg px-2.5 py-2.5 text-left text-sm transition-colors touch-manipulation',
+                'hover:bg-muted active:bg-muted/80 disabled:opacity-50',
                 activeId === s.id && 'bg-muted font-medium',
               )}
             >

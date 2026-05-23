@@ -22,6 +22,15 @@ import {
 import { InlineActivityFeed } from '@/components/agent/inline-activity-feed'
 import { AgentMessageContent } from '@/components/agent/agent-message-content'
 import { useAgentPanels } from '@/components/agent/use-agent-panels'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet'
+import { useHydrated } from '@/hooks/use-hydrated'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 type ChatMessage =
   | { id: string; role: 'user'; content: string }
@@ -116,8 +125,13 @@ function AgentWorkspaceInner({ enableE2eBridge = false }: AgentWorkspaceProps) {
   const threadIdRef = useRef<string | null>(null)
   const initialUrlHandled = useRef(false)
   const { chatsOpen, setChatsOpen, toggleChats } = useAgentPanels()
+  const hydrated = useHydrated()
+  const isMobileViewport = useIsMobile()
+  const isMobile = hydrated && isMobileViewport
 
   threadIdRef.current = threadId
+
+  const closeChatsPanel = useCallback(() => setChatsOpen(false), [setChatsOpen])
 
   const setThreadInUrl = useCallback(
     (id: string | null) => {
@@ -189,6 +203,19 @@ function AgentWorkspaceInner({ enableE2eBridge = false }: AgentWorkspaceProps) {
     setStatus(null)
     setThreadInUrl(null)
   }, [setThreadInUrl])
+
+  const selectSession = useCallback(
+    (id: string) => {
+      void loadThread(id)
+      if (isMobile) closeChatsPanel()
+    },
+    [loadThread, isMobile, closeChatsPanel],
+  )
+
+  const handleNewChat = useCallback(() => {
+    startNewChat()
+    if (isMobile) closeChatsPanel()
+  }, [startNewChat, isMobile, closeChatsPanel])
 
   useEffect(() => {
     if (initialUrlHandled.current) return
@@ -410,10 +437,23 @@ function AgentWorkspaceInner({ enableE2eBridge = false }: AgentWorkspaceProps) {
 
   const uiDisabled = streamActive || historyLoading
 
+  const sessionList = (
+    <AgentSessionList
+      sessions={sessions}
+      activeId={threadId}
+      loading={sessionsLoading}
+      disabled={uiDisabled}
+      className={isMobile ? 'w-full border-r-0' : undefined}
+      onSelect={selectSession}
+      onNewChat={handleNewChat}
+      onHide={closeChatsPanel}
+    />
+  )
+
   return (
     <div className="flex h-full min-h-0 flex-1 overflow-hidden">
-      <Card className="flex h-full max-h-full min-h-0 min-w-0 flex-1 flex-row overflow-hidden p-0">
-        {!chatsOpen ? (
+      <Card className="flex h-full max-h-full min-h-0 min-w-0 flex-1 flex-row overflow-hidden rounded-lg border-0 bg-card p-0 shadow-none sm:rounded-xl sm:border sm:shadow-sm">
+        {!isMobile && !chatsOpen ? (
           <div className="flex w-11 shrink-0 flex-col items-center border-r border-border py-2">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -421,7 +461,7 @@ function AgentWorkspaceInner({ enableE2eBridge = false }: AgentWorkspaceProps) {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="size-8"
+                  className="size-8 touch-manipulation"
                   onClick={() => setChatsOpen(true)}
                   aria-label="Show chats"
                 >
@@ -431,52 +471,57 @@ function AgentWorkspaceInner({ enableE2eBridge = false }: AgentWorkspaceProps) {
               <TooltipContent side="right">Show chats</TooltipContent>
             </Tooltip>
           </div>
-        ) : (
-          <AgentSessionList
-            sessions={sessions}
-            activeId={threadId}
-            loading={sessionsLoading}
-            disabled={uiDisabled}
-            onSelect={(id) => void loadThread(id)}
-            onNewChat={startNewChat}
-            onHide={() => setChatsOpen(false)}
-          />
-        )}
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center gap-2 border-b border-border p-3 sm:gap-3 sm:p-4">
+        ) : null}
+        {!isMobile && chatsOpen ? sessionList : null}
+
+        {isMobile ? (
+          <Sheet open={chatsOpen} onOpenChange={setChatsOpen}>
+            <SheetContent
+              side="left"
+              className="flex h-full w-[min(100vw,20rem)] max-w-[85vw] flex-col gap-0 p-0 sm:max-w-xs [&>button]:top-3 [&>button]:right-3"
+            >
+              <SheetHeader className="sr-only">
+                <SheetTitle>Chat history</SheetTitle>
+                <SheetDescription>Past agent conversations</SheetDescription>
+              </SheetHeader>
+              {sessionList}
+            </SheetContent>
+          </Sheet>
+        ) : null}
+
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="flex shrink-0 items-center gap-2 border-b border-border px-2 py-2.5 sm:gap-3 sm:px-4 sm:py-3">
             <Bot className="size-5 shrink-0 text-primary" />
             <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-semibold">CRM Assistant</h3>
-              <p className="truncate text-xs text-muted-foreground">
+              <h3 className="text-sm font-semibold leading-tight">CRM Assistant</h3>
+              <p className="truncate text-[11px] text-muted-foreground sm:text-xs">
                 {activeSessionTitle}
                 {status ? ` · ${status}` : ''}
                 {streamActive ? ' · working' : ''}
                 {historyLoading ? ' · loading…' : ''}
               </p>
             </div>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant={chatsOpen ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-8 shrink-0 gap-1.5 px-2"
-                  onClick={toggleChats}
-                  aria-pressed={chatsOpen}
-                  aria-label={chatsOpen ? 'Hide chats' : 'Show chats'}
-                >
-                  <History className="size-4" />
-                  <span className="hidden sm:inline">Chats</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{chatsOpen ? 'Hide chat list' : 'Show chat list'}</TooltipContent>
-            </Tooltip>
+            <Button
+              type="button"
+              variant={chatsOpen ? 'secondary' : 'outline'}
+              size="sm"
+              className="h-9 shrink-0 gap-1.5 px-2.5 touch-manipulation sm:h-8"
+              onClick={toggleChats}
+              aria-pressed={chatsOpen}
+              aria-label={chatsOpen ? 'Hide chats' : 'Show chats'}
+            >
+              <History className="size-4" />
+              <span className="text-xs sm:text-sm">Chats</span>
+            </Button>
             {(streamActive || historyLoading) && (
               <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
             )}
           </div>
 
-          <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-4">
+          <div
+            ref={scrollRef}
+            className="flex-1 space-y-3 overflow-y-auto overscroll-y-contain p-3 sm:space-y-4 sm:p-4"
+          >
             {historyLoading ? (
               <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" />
@@ -484,9 +529,11 @@ function AgentWorkspaceInner({ enableE2eBridge = false }: AgentWorkspaceProps) {
               </div>
             ) : null}
             {!historyLoading && messages.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+              <div className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground sm:p-6">
                 Ask me to find a client or draft an invoice. Chats are saved
-                {chatsOpen ? ' — pick a past conversation on the left' : ' — open Chats to switch threads'}.
+                {isMobile || !chatsOpen
+                  ? ' — tap Chats to switch threads'
+                  : ' — pick a past conversation on the left'}.
               </div>
             ) : null}
 
@@ -495,11 +542,11 @@ function AgentWorkspaceInner({ enableE2eBridge = false }: AgentWorkspaceProps) {
                 if (m.role === 'user') {
                   return (
                     <div key={m.id} className="flex justify-end">
-                      <div className="flex max-w-[80%] items-start gap-2">
-                        <div className="rounded-2xl bg-primary px-4 py-2 text-sm text-primary-foreground">
+                      <div className="flex max-w-[min(92%,28rem)] items-end gap-1.5 sm:max-w-[80%] sm:items-start sm:gap-2">
+                        <div className="rounded-2xl rounded-br-md bg-primary px-3.5 py-2 text-[15px] leading-snug text-primary-foreground sm:px-4 sm:text-sm">
                           {m.content}
                         </div>
-                        <div className="mt-1 flex size-7 items-center justify-center rounded-full bg-primary/10">
+                        <div className="hidden size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 sm:mt-1 sm:flex">
                           <User className="size-4 text-primary" />
                         </div>
                       </div>
@@ -510,7 +557,7 @@ function AgentWorkspaceInner({ enableE2eBridge = false }: AgentWorkspaceProps) {
                   return (
                     <div
                       key={m.id}
-                      className="ml-9 rounded-xl border border-amber-500/50 bg-amber-500/5 px-4 py-3 text-sm"
+                      className="rounded-xl border border-amber-500/50 bg-amber-500/5 px-3 py-2.5 text-sm sm:ml-9 sm:px-4 sm:py-3"
                     >
                       <div className="font-medium text-amber-700 dark:text-amber-400">
                         Confirmation required
@@ -521,8 +568,8 @@ function AgentWorkspaceInner({ enableE2eBridge = false }: AgentWorkspaceProps) {
                 }
                 if (m.role === 'draft_link') {
                   return (
-                    <div key={m.id} className="ml-9">
-                      <Button asChild size="sm" className="gap-2">
+                    <div key={m.id} className="sm:ml-9">
+                      <Button asChild size="sm" className="h-10 w-full gap-2 touch-manipulation sm:h-8 sm:w-auto">
                         <Link href={`/dashboard/invoices/${m.invoiceId}`}>
                           Review draft {m.invoiceNumber}
                           <ExternalLink className="size-3.5 opacity-70" />
@@ -532,11 +579,11 @@ function AgentWorkspaceInner({ enableE2eBridge = false }: AgentWorkspaceProps) {
                   )
                 }
                 return (
-                  <div key={m.id} className="flex items-start gap-2">
-                    <div className="mt-1 flex size-7 items-center justify-center rounded-full bg-primary/10">
+                  <div key={m.id} className="flex items-start gap-1.5 sm:gap-2">
+                    <div className="mt-0.5 hidden size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 sm:mt-1 sm:flex">
                       <Bot className="size-4 text-primary" />
                     </div>
-                    <div className="max-w-[80%] rounded-2xl bg-muted px-4 py-2 text-sm">
+                    <div className="max-w-[min(92%,28rem)] rounded-2xl rounded-bl-md bg-muted px-3.5 py-2 text-[15px] leading-snug sm:max-w-[80%] sm:px-4 sm:text-sm">
                       <AgentMessageContent
                         content={m.content}
                         streaming={m.streaming}
@@ -556,7 +603,7 @@ function AgentWorkspaceInner({ enableE2eBridge = false }: AgentWorkspaceProps) {
             ) : null}
           </div>
 
-          <div className="border-t border-border p-3">
+          <div className="shrink-0 border-t border-border bg-background/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:p-3">
             <div className="flex items-end gap-2">
               <Textarea
                 data-testid="agent-chat-input"
@@ -567,10 +614,10 @@ function AgentWorkspaceInner({ enableE2eBridge = false }: AgentWorkspaceProps) {
                     ? 'Confirm or clarify…'
                     : streamActive
                       ? 'Keep typing — message will queue…'
-                      : 'Type a message…'
+                      : 'Message…'
                 }
                 rows={1}
-                className="resize-none"
+                className="max-h-32 min-h-10 flex-1 resize-none text-base leading-snug sm:min-h-9 sm:text-sm"
                 disabled={historyLoading}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -580,11 +627,12 @@ function AgentWorkspaceInner({ enableE2eBridge = false }: AgentWorkspaceProps) {
                 }}
               />
               <Button
-              onClick={handleSend}
-              disabled={!input.trim() || historyLoading}
-              size="icon"
-              aria-label="Send message"
-            >
+                onClick={handleSend}
+                disabled={!input.trim() || historyLoading}
+                size="icon"
+                className="size-10 shrink-0 touch-manipulation sm:size-9"
+                aria-label="Send message"
+              >
                 {streamActive && !input.trim() ? (
                   <Loader2 className="size-4 animate-spin" />
                 ) : (

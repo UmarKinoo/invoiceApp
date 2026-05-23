@@ -28,7 +28,7 @@ export function DashboardShell({
           <PageContainer
             className={cn(
               isAgentPage
-                ? 'mx-0 flex h-[calc(100dvh-5.5rem)] max-w-none min-h-0 flex-col overflow-hidden px-2 py-2 pb-20 sm:px-3 lg:h-[calc(100dvh-1.5rem)] lg:px-4 lg:py-3 lg:pb-3'
+                ? 'mx-0 flex h-[calc(100dvh-4.25rem-env(safe-area-inset-top,0px))] max-w-none min-h-0 flex-col overflow-hidden px-0 py-0 pb-[calc(4.75rem+env(safe-area-inset-bottom,0px))] sm:px-2 sm:py-2 sm:pb-20 lg:h-[calc(100dvh-1.5rem)] lg:px-4 lg:py-3 lg:pb-3'
                 : 'pb-24 lg:pb-10',
             )}
           >

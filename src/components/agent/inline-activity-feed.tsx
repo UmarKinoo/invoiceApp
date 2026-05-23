@@ -28,7 +28,7 @@ export function InlineActivityFeed({ activities, streamActive, queueCount = 0 }:
 
   return (
     <div
-      className="ml-9 max-w-md animate-in fade-in slide-in-from-bottom-1 duration-300"
+      className="max-w-full animate-in fade-in slide-in-from-bottom-1 duration-300 sm:ml-9 sm:max-w-md"
       aria-live="polite"
       aria-label="Agent progress"
     >

@@ -1,10 +1,16 @@
 'use client'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 const STORAGE_KEY = 'agent-workspace-panels'
+const MOBILE_BREAKPOINT = 768
 
 const DEFAULT_CHATS_OPEN = true
+
+function isMobileViewport(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.innerWidth < MOBILE_BREAKPOINT
+}
 
 function readChatsOpen(): boolean {
   if (typeof window === 'undefined') return DEFAULT_CHATS_OPEN
@@ -19,7 +25,20 @@ function readChatsOpen(): boolean {
 }
 
 export function useAgentPanels() {
-  const [chatsOpen, setChatsOpenState] = useState(readChatsOpen)
+  // Match SSR: always start with DEFAULT_CHATS_OPEN; sync from localStorage after mount.
+  const [chatsOpen, setChatsOpenState] = useState(DEFAULT_CHATS_OPEN)
+
+  useEffect(() => {
+    try {
+      let open = readChatsOpen()
+      if (isMobileViewport() && !localStorage.getItem(STORAGE_KEY)) {
+        open = false
+      }
+      setChatsOpenState(open)
+    } catch {
+      /* ignore */
+    }
+  }, [])
 
   const persistChatsOpen = useCallback((open: boolean) => {
     setChatsOpenState(open)
