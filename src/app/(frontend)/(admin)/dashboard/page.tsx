@@ -1,7 +1,9 @@
 import { getPayloadClient } from '@/lib/payload-server'
 import { getUser } from '@/lib/auth'
+import { computeLedgerSummary } from '@/lib/ledger-stats'
+import { listAgentSessionsForUser } from '@/lib/agent/list-sessions'
 import { DashboardPageClient } from './dashboard-page-client'
-import type { Invoice, Client, Transaction } from '@/payload-types'
+import type { Invoice, Client } from '@/payload-types'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +12,7 @@ export default async function DashboardPage() {
   let invoices: Invoice[] = []
   let clients: Client[] = []
   let ledgerStats: { revenue: number; outstanding: number } | undefined
+  let recentAgentSessions: Awaited<ReturnType<typeof listAgentSessionsForUser>> = []
 
   try {
     const payload = await getPayloadClient()
@@ -26,42 +29,19 @@ export default async function DashboardPage() {
 
   try {
     const payload = await getPayloadClient()
-    const txRes = await payload.find({
-      collection: 'transactions',
-      pagination: false,
-      depth: 0,
-    })
-    const transactions = (txRes.docs ?? []) as Transaction[]
-
-    const txRevenue = transactions
-      .filter((t) => t.type === 'income')
-      .reduce((s, t) => s + (Number(t.amount) ?? 0), 0)
-    const invoicePayments = new Map<number, number>()
-    for (const t of transactions) {
-      if (t.type !== 'income' || !t.invoice) continue
-      const id = typeof t.invoice === 'object' ? (t.invoice as { id: number }).id : t.invoice
-      invoicePayments.set(id, (invoicePayments.get(id) ?? 0) + (Number(t.amount) ?? 0))
-    }
-
-    let paidTotal = 0
-    let outstanding = 0
-    for (const inv of invoices) {
-      if (inv.status === 'cancelled') continue
-      const total = Number(inv.total) ?? 0
-      if (inv.status === 'paid') {
-        paidTotal += total
-      } else {
-        const txPaid = invoicePayments.get(inv.id) ?? 0
-        const remaining = Math.max(0, total - txPaid)
-        paidTotal += txPaid
-        outstanding += remaining
-      }
-    }
-
-    const revenue = Math.max(paidTotal, txRevenue)
-    ledgerStats = { revenue, outstanding }
+    const summary = await computeLedgerSummary(payload)
+    ledgerStats = { revenue: summary.revenue, outstanding: summary.outstanding }
   } catch {
     ledgerStats = undefined
+  }
+
+  if (user?.id) {
+    try {
+      const payload = await getPayloadClient()
+      recentAgentSessions = await listAgentSessionsForUser(payload, user.id, 5)
+    } catch {
+      recentAgentSessions = []
+    }
   }
 
   return (
@@ -76,6 +56,7 @@ export default async function DashboardPage() {
       }))}
       clients={clients.map((c) => ({ id: String(c.id) }))}
       ledgerStats={ledgerStats}
+      recentAgentSessions={recentAgentSessions}
     />
   )
 }

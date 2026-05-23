@@ -307,6 +307,50 @@
   from { transform: translateY(20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+/* Swiftbook Agent card — one-shot load shimmer & reveal */
+@keyframes agent-ai-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes agent-ai-shimmer {
+  0% {
+    transform: translateX(-130%) skewX(-14deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(230%) skewX(-14deg);
+    opacity: 0;
+  }
+}
+
+.agent-ai-enter {
+  animation: agent-ai-enter 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.agent-ai-shimmer {
+  animation: agent-ai-shimmer 2.35s cubic-bezier(0.4, 0, 0.2, 1) 0.2s 1 both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-ai-enter {
+    animation: agent-ai-enter 0.2s ease-out both;
+  }
+
+  .agent-ai-shimmer {
+    animation: none;
+  }
+}
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 

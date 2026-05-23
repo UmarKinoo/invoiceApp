@@ -26,6 +26,7 @@ export const enum_users_role = pgEnum('enum_users_role', ['admin', 'user'])
 export const enum_invoices_status = pgEnum('enum_invoices_status', [
   'draft',
   'sent',
+  'partial',
   'paid',
   'overdue',
   'cancelled',
@@ -37,11 +38,13 @@ export const enum_quotes_status = pgEnum('enum_quotes_status', [
   'expired',
 ])
 export const enum_tasks_priority = pgEnum('enum_tasks_priority', ['low', 'medium', 'high'])
+export const enum_transactions_type = pgEnum('enum_transactions_type', ['income', 'expense'])
 export const enum_transactions_method = pgEnum('enum_transactions_method', [
   'stripe',
   'paypal',
   'bank_transfer',
   'cash',
+  'check',
 ])
 export const enum_activity_type = pgEnum('enum_activity_type', [
   'note',
@@ -104,6 +107,7 @@ export const users = pgTable(
       withTimezone: true,
       precision: 3,
     }),
+    lastLoginAt: timestamp('last_login_at', { mode: 'string', withTimezone: true, precision: 3 }),
     updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
       .defaultNow()
       .notNull(),
@@ -133,7 +137,7 @@ export const media = pgTable(
   'media',
   {
     id: serial('id').primaryKey(),
-    alt: varchar('alt').notNull(),
+    alt: varchar('alt').notNull().default('Company logo'),
     updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
       .defaultNow()
       .notNull(),
@@ -182,9 +186,10 @@ export const clients = pgTable(
     id: serial('id').primaryKey(),
     name: varchar('name').notNull(),
     company: varchar('company'),
-    email: varchar('email').notNull(),
-    phone: varchar('phone'),
+    email: varchar('email'),
+    phone: varchar('phone').notNull(),
     brn: varchar('brn'),
+    vatNumber: varchar('vat_number'),
     address: varchar('address'),
     socials_twitter: varchar('socials_twitter'),
     socials_linkedin: varchar('socials_linkedin'),
@@ -335,8 +340,12 @@ export const transactions = pgTable(
   'transactions',
   {
     id: serial('id').primaryKey(),
+    type: enum_transactions_type('type').notNull().default('income'),
     date: timestamp('date', { mode: 'string', withTimezone: true, precision: 3 }).notNull(),
     amount: numeric('amount', { mode: 'number' }).notNull(),
+    invoice: integer('invoice_id').references(() => invoices.id, {
+      onDelete: 'set null',
+    }),
     client: integer('client_id')
       .notNull()
       .references(() => clients.id, {
@@ -344,6 +353,7 @@ export const transactions = pgTable(
       }),
     reference: varchar('reference'),
     method: enum_transactions_method('method').default('stripe'),
+    notes: varchar('notes'),
     updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
       .defaultNow()
       .notNull(),
@@ -352,6 +362,7 @@ export const transactions = pgTable(
       .notNull(),
   },
   (columns) => [
+    index('transactions_invoice_idx').on(columns.invoice),
     index('transactions_client_idx').on(columns.client),
     index('transactions_updated_at_idx').on(columns.updatedAt),
     index('transactions_created_at_idx').on(columns.createdAt),
@@ -390,11 +401,21 @@ export const activity = pgTable(
   ],
 )
 
-export const health_check = pgTable(
-  'health_check',
+export const agent_sessions = pgTable(
+  'agent_sessions',
   {
     id: serial('id').primaryKey(),
-    status: varchar('status'),
+    user: integer('user_id')
+      .notNull()
+      .references(() => users.id, {
+        onDelete: 'set null',
+      }),
+    title: varchar('title'),
+    lastMessageAt: timestamp('last_message_at', {
+      mode: 'string',
+      withTimezone: true,
+      precision: 3,
+    }),
     updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 })
       .defaultNow()
       .notNull(),
@@ -403,8 +424,9 @@ export const health_check = pgTable(
       .notNull(),
   },
   (columns) => [
-    index('health_check_updated_at_idx').on(columns.updatedAt),
-    index('health_check_created_at_idx').on(columns.createdAt),
+    index('agent_sessions_user_idx').on(columns.user),
+    index('agent_sessions_updated_at_idx').on(columns.updatedAt),
+    index('agent_sessions_created_at_idx').on(columns.createdAt),
   ],
 )
 
@@ -452,7 +474,7 @@ export const payload_locked_documents_rels = pgTable(
     tasksID: integer('tasks_id'),
     transactionsID: integer('transactions_id'),
     activityID: integer('activity_id'),
-    health_checkID: integer('health_check_id'),
+    'agent-sessionsID': integer('agent_sessions_id'),
   },
   (columns) => [
     index('payload_locked_documents_rels_order_idx').on(columns.order),
@@ -466,7 +488,7 @@ export const payload_locked_documents_rels = pgTable(
     index('payload_locked_documents_rels_tasks_id_idx').on(columns.tasksID),
     index('payload_locked_documents_rels_transactions_id_idx').on(columns.transactionsID),
     index('payload_locked_documents_rels_activity_id_idx').on(columns.activityID),
-    index('payload_locked_documents_rels_health_check_id_idx').on(columns.health_checkID),
+    index('payload_locked_documents_rels_agent_sessions_id_idx').on(columns['agent-sessionsID']),
     foreignKey({
       columns: [columns['parent']],
       foreignColumns: [payload_locked_documents.id],
@@ -513,9 +535,9 @@ export const payload_locked_documents_rels = pgTable(
       name: 'payload_locked_documents_rels_activity_fk',
     }).onDelete('cascade'),
     foreignKey({
-      columns: [columns['health_checkID']],
-      foreignColumns: [health_check.id],
-      name: 'payload_locked_documents_rels_health_check_fk',
+      columns: [columns['agent-sessionsID']],
+      foreignColumns: [agent_sessions.id],
+      name: 'payload_locked_documents_rels_agent_sessions_fk',
     }).onDelete('cascade'),
   ],
 )
@@ -586,20 +608,35 @@ export const payload_migrations = pgTable(
   ],
 )
 
-export const settings = pgTable('settings', {
-  id: serial('id').primaryKey(),
-  businessName: varchar('business_name').notNull().default(''),
-  businessAddress: varchar('business_address').default(''),
-  businessEmail: varchar('business_email').default(''),
-  businessPhone: varchar('business_phone').default(''),
-  businessWebsite: varchar('business_website').default(''),
-  logoUrl: varchar('logo_url'),
-  invoicePrefix: varchar('invoice_prefix').default('INV-'),
-  taxRateDefault: numeric('tax_rate_default', { mode: 'number' }).default(0),
-  currency: enum_settings_currency('currency').default('MUR'),
-  updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 }),
-  createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 }),
-})
+export const settings = pgTable(
+  'settings',
+  {
+    id: serial('id').primaryKey(),
+    businessName: varchar('business_name').notNull().default(''),
+    businessAddress: varchar('business_address').default(''),
+    businessEmail: varchar('business_email').default(''),
+    businessPhone: varchar('business_phone').default(''),
+    businessWebsite: varchar('business_website').default(''),
+    logo: integer('logo_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+    logoUrl: varchar('logo_url'),
+    logoWhite: integer('logo_white_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+    businessBrn: varchar('business_brn'),
+    vatRegistrationNumber: varchar('vat_registration_number'),
+    invoicePrefix: varchar('invoice_prefix').default('INV-'),
+    taxRateDefault: numeric('tax_rate_default', { mode: 'number' }).default(0),
+    currency: enum_settings_currency('currency').default('MUR'),
+    updatedAt: timestamp('updated_at', { mode: 'string', withTimezone: true, precision: 3 }),
+    createdAt: timestamp('created_at', { mode: 'string', withTimezone: true, precision: 3 }),
+  },
+  (columns) => [
+    index('settings_logo_idx').on(columns.logo),
+    index('settings_logo_white_idx').on(columns.logoWhite),
+  ],
+)
 
 export const relations_users_sessions = relations(users_sessions, ({ one }) => ({
   _parentID: one(users, {
@@ -668,6 +705,11 @@ export const relations_tasks = relations(tasks, ({ one }) => ({
   }),
 }))
 export const relations_transactions = relations(transactions, ({ one }) => ({
+  invoice: one(invoices, {
+    fields: [transactions.invoice],
+    references: [invoices.id],
+    relationName: 'invoice',
+  }),
   client: one(clients, {
     fields: [transactions.client],
     references: [clients.id],
@@ -686,7 +728,13 @@ export const relations_activity = relations(activity, ({ one }) => ({
     relationName: 'createdBy',
   }),
 }))
-export const relations_health_check = relations(health_check, () => ({}))
+export const relations_agent_sessions = relations(agent_sessions, ({ one }) => ({
+  user: one(users, {
+    fields: [agent_sessions.user],
+    references: [users.id],
+    relationName: 'user',
+  }),
+}))
 export const relations_payload_kv = relations(payload_kv, () => ({}))
 export const relations_payload_locked_documents_rels = relations(
   payload_locked_documents_rels,
@@ -736,10 +784,10 @@ export const relations_payload_locked_documents_rels = relations(
       references: [activity.id],
       relationName: 'activity',
     }),
-    health_checkID: one(health_check, {
-      fields: [payload_locked_documents_rels.health_checkID],
-      references: [health_check.id],
-      relationName: 'health_check',
+    'agent-sessionsID': one(agent_sessions, {
+      fields: [payload_locked_documents_rels['agent-sessionsID']],
+      references: [agent_sessions.id],
+      relationName: 'agent-sessions',
     }),
   }),
 )
@@ -772,13 +820,25 @@ export const relations_payload_preferences = relations(payload_preferences, ({ m
   }),
 }))
 export const relations_payload_migrations = relations(payload_migrations, () => ({}))
-export const relations_settings = relations(settings, () => ({}))
+export const relations_settings = relations(settings, ({ one }) => ({
+  logo: one(media, {
+    fields: [settings.logo],
+    references: [media.id],
+    relationName: 'logo',
+  }),
+  logoWhite: one(media, {
+    fields: [settings.logoWhite],
+    references: [media.id],
+    relationName: 'logoWhite',
+  }),
+}))
 
 type DatabaseSchema = {
   enum_users_role: typeof enum_users_role
   enum_invoices_status: typeof enum_invoices_status
   enum_quotes_status: typeof enum_quotes_status
   enum_tasks_priority: typeof enum_tasks_priority
+  enum_transactions_type: typeof enum_transactions_type
   enum_transactions_method: typeof enum_transactions_method
   enum_activity_type: typeof enum_activity_type
   enum_activity_related_collection: typeof enum_activity_related_collection
@@ -795,7 +855,7 @@ type DatabaseSchema = {
   tasks: typeof tasks
   transactions: typeof transactions
   activity: typeof activity
-  health_check: typeof health_check
+  agent_sessions: typeof agent_sessions
   payload_kv: typeof payload_kv
   payload_locked_documents: typeof payload_locked_documents
   payload_locked_documents_rels: typeof payload_locked_documents_rels
@@ -815,7 +875,7 @@ type DatabaseSchema = {
   relations_tasks: typeof relations_tasks
   relations_transactions: typeof relations_transactions
   relations_activity: typeof relations_activity
-  relations_health_check: typeof relations_health_check
+  relations_agent_sessions: typeof relations_agent_sessions
   relations_payload_kv: typeof relations_payload_kv
   relations_payload_locked_documents_rels: typeof relations_payload_locked_documents_rels
   relations_payload_locked_documents: typeof relations_payload_locked_documents

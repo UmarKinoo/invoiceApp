@@ -14,6 +14,7 @@ import {
   Sparkles,
   Settings,
   LogOut,
+  Bot,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { User } from '@/payload-types'
@@ -62,14 +63,15 @@ const SIDEBAR_NAV: { href: string; icon: LucideIcon; label: string }[] = [
   { href: '/dashboard/invoices', icon: Receipt, label: 'Invoices' },
   { href: '/dashboard/transactions', icon: Wallet, label: 'Ledger' },
   { href: '/dashboard/insights', icon: Sparkles, label: 'AI Insights' },
+  { href: '/dashboard/agent', icon: Bot, label: 'Agent' },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ]
 
 const SIDEBAR_SECTIONS = [
   { title: 'Core', items: SIDEBAR_NAV.slice(0, 3) },
   { title: 'Sales', items: SIDEBAR_NAV.slice(3, 6) },
-  { title: 'Intelligence', items: SIDEBAR_NAV.slice(6, 7) },
-  { title: 'System', items: SIDEBAR_NAV.slice(7, 8) },
+  { title: 'Intelligence', items: SIDEBAR_NAV.slice(6, 8) },
+  { title: 'System', items: SIDEBAR_NAV.slice(8, 9) },
 ]
 
 const INVOICES_SUBMENU = [

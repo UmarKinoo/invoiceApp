@@ -17,6 +17,7 @@ import { Quotes } from '@/collections/Quotes'
 import { Tasks } from '@/collections/Tasks'
 import { Transactions } from '@/collections/Transactions'
 import { Activity } from '@/collections/Activity'
+import { AgentSessions } from '@/collections/AgentSessions'
 import { Settings } from '@/collections/Settings'
 
 const filename = fileURLToPath(import.meta.url)
@@ -29,7 +30,7 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Users, Media, Clients, Invoices, Quotes, Tasks, Transactions, Activity],
+  collections: [Users, Media, Clients, Invoices, Quotes, Tasks, Transactions, Activity, AgentSessions],
   globals: [Settings],
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',
@@ -40,6 +41,8 @@ export default buildConfig({
     pool: {
       connectionString: process.env.DATABASE_URI || process.env.DATABASE_URL || process.env.SUPABASE_URL || '',
     },
+    // Vitest/integration: avoid dev schema push against dirty local data
+    push: process.env.PAYLOAD_TEST_NO_PUSH === '1' ? false : undefined,
   }),
   sharp,
   plugins: [

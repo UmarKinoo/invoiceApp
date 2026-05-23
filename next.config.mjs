@@ -8,6 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Your Next.js config here
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   output: 'standalone', // Required for Docker deployment
   serverExternalPackages: ['@react-pdf/renderer'],
   transpilePackages: ['geist'],

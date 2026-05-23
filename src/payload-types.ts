@@ -75,6 +75,7 @@ export interface Config {
     tasks: Task;
     transactions: Transaction;
     activity: Activity;
+    'agent-sessions': AgentSession;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -90,6 +91,7 @@ export interface Config {
     tasks: TasksSelect<false> | TasksSelect<true>;
     transactions: TransactionsSelect<false> | TransactionsSelect<true>;
     activity: ActivitySelect<false> | ActivitySelect<true>;
+    'agent-sessions': AgentSessionsSelect<false> | AgentSessionsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -385,6 +387,21 @@ export interface Activity {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "agent-sessions".
+ */
+export interface AgentSession {
+  id: number;
+  user: number | User;
+  /**
+   * Auto-generated from first user message
+   */
+  title?: string | null;
+  lastMessageAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -438,6 +455,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'activity';
         value: number | Activity;
+      } | null)
+    | ({
+        relationTo: 'agent-sessions';
+        value: number | AgentSession;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -646,6 +667,17 @@ export interface ActivitySelect<T extends boolean = true> {
   relatedId?: T;
   meta?: T;
   createdBy?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "agent-sessions_select".
+ */
+export interface AgentSessionsSelect<T extends boolean = true> {
+  user?: T;
+  title?: T;
+  lastMessageAt?: T;
   updatedAt?: T;
   createdAt?: T;
 }

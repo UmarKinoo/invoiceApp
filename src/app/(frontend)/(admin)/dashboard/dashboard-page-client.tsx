@@ -10,6 +10,8 @@ import { formatCurrency } from '@/lib/utils'
 import { clearAuthCookies } from '@/lib/auth'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { DashboardChart } from '@/app/(frontend)/(admin)/dashboard/dashboard-chart'
+import { DashboardRecentChats } from '@/components/dashboard/dashboard-recent-chats'
+import type { AgentSessionSummary } from '@/lib/agent/list-sessions'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -84,11 +86,13 @@ export function DashboardPageClient({
   invoices,
   clients,
   ledgerStats,
+  recentAgentSessions = [],
 }: {
   user: User | null
   invoices: InvoiceDoc[]
   clients: ClientDoc[]
   ledgerStats?: { revenue: number; outstanding: number }
+  recentAgentSessions?: AgentSessionSummary[]
 }) {
   const router = useRouter()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -281,6 +285,8 @@ export function DashboardPageClient({
           </div>
         </Button>
       </div>
+
+      <DashboardRecentChats sessions={recentAgentSessions} />
 
       <div className="grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-4 lg:gap-6">
         <StatCard
