@@ -4,6 +4,7 @@ import { createInvoiceTool } from '@/lib/agent/tools/invoices'
 import {
   findInvoiceTool,
   getInvoiceTool,
+  sendInvoiceEmailTool,
   updateInvoiceStatusTool,
 } from '@/lib/agent/tools/invoice-tools'
 import { getLedgerSummaryTool } from '@/lib/agent/tools/ledger'
@@ -109,6 +110,16 @@ describe.skipIf(!dbRequired)('agent tools', () => {
     expect(parsed.invoiceCount).toBeGreaterThan(0)
     expect(typeof parsed.revenue).toBe('number')
     expect(typeof parsed.outstanding).toBe('number')
+  })
+
+  it('send_invoice_email returns error for missing invoice', async () => {
+    const out = await sendInvoiceEmailTool.invoke(
+      { invoiceId: 999_999_999, to: 'nobody@example.com' },
+      toolConfig(),
+    )
+    const parsed = JSON.parse(out) as { ok: boolean; error?: string }
+    expect(parsed.ok).toBe(false)
+    expect(parsed.error).toMatch(/not found/i)
   })
 
   it('update_invoice_status changes status', async () => {

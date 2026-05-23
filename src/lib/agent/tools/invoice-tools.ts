@@ -4,6 +4,7 @@ import type { LangGraphRunnableConfig } from '@langchain/langgraph'
 import type { Where } from 'payload'
 import { getPayloadClient } from '@/lib/payload-server'
 import { invoiceReviewPath, invoiceReviewUrl } from '@/lib/agent/urls'
+import { sendInvoiceEmail } from '@/lib/send-invoice-email'
 import { getToolContext } from './context'
 
 const invoiceStatusSchema = z.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled'])
@@ -155,6 +156,85 @@ export const getInvoiceTool = tool(
       'Load one invoice by Payload id (line items, totals, client, status). Use find_invoice if the id is unknown.',
     schema: z.object({
       invoiceId: z.number().int().positive().describe('Payload invoice id from find_invoice'),
+    }),
+  },
+)
+
+function clientEmailFromInvoice(
+  client: number | { id: number; email?: string | null } | null | undefined,
+): string | null {
+  if (client == null || typeof client === 'number') return null
+  const email = client.email?.trim()
+  return email || null
+}
+
+export const sendInvoiceEmailTool = tool(
+  async (input, config): Promise<string> => {
+    const args = z
+      .object({
+        invoiceId: z.number().int().positive(),
+        to: z.string().email().optional(),
+        subject: z.string().optional(),
+        messageBody: z.string().optional(),
+      })
+      .parse(input)
+
+    const { userId } = getToolContext(config as LangGraphRunnableConfig)
+    const payload = await getPayloadClient()
+
+    let to = args.to?.trim()
+    if (!to) {
+      try {
+        const inv = await payload.findByID({
+          collection: 'invoices',
+          id: args.invoiceId,
+          depth: 1,
+        })
+        to = clientEmailFromInvoice(
+          inv.client as { id: number; email?: string | null } | number | null,
+        ) ?? undefined
+      } catch {
+        to = undefined
+      }
+    }
+
+    if (!to) {
+      return JSON.stringify({
+        ok: false,
+        error:
+          'No recipient email. Pass `to` or ensure the invoice client has an email on file.',
+      })
+    }
+
+    const result = await sendInvoiceEmail({
+      invoiceId: args.invoiceId,
+      to,
+      subject: args.subject,
+      messageBody: args.messageBody,
+      userId,
+      payload,
+    })
+
+    return JSON.stringify(result)
+  },
+  {
+    name: 'send_invoice_email',
+    description:
+      'Email an invoice PDF to a recipient (same as Send from the invoice page). ' +
+      'Uses Resend. Sets invoice status to sent. If `to` is omitted, uses the client email on the invoice. ' +
+      'Always call ask_human to confirm recipient and invoice before invoking.',
+    schema: z.object({
+      invoiceId: z.number().int().positive().describe('Payload invoice id'),
+      to: z
+        .string()
+        .email()
+        .optional()
+        .describe('Recipient email; defaults to the invoice client email'),
+      subject: z.string().optional().describe('Email subject; defaults to Invoice {number}'),
+      messageBody: z
+        .string()
+        .optional()
+        .describe('Short message shown in the email body above the download button'),
     }),
   },
 )

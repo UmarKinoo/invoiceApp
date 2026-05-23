@@ -1,6 +1,11 @@
 import { findClientTool } from './clients'
 import { createInvoiceTool } from './invoices'
-import { findInvoiceTool, getInvoiceTool, updateInvoiceStatusTool } from './invoice-tools'
+import {
+  findInvoiceTool,
+  getInvoiceTool,
+  sendInvoiceEmailTool,
+  updateInvoiceStatusTool,
+} from './invoice-tools'
 import { getLedgerSummaryTool } from './ledger'
 import { askHumanTool } from './utilities'
 
@@ -10,6 +15,7 @@ export const tools = [
   getInvoiceTool,
   getLedgerSummaryTool,
   createInvoiceTool,
+  sendInvoiceEmailTool,
   updateInvoiceStatusTool,
   askHumanTool,
 ] as const

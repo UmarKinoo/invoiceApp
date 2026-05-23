@@ -16,6 +16,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_invoice: 'Loading invoice',
   get_ledger_summary: 'Summarizing ledger',
   create_invoice: 'Creating invoice',
+  send_invoice_email: 'Sending invoice email',
   update_invoice_status: 'Updating invoice status',
   ask_human: 'Waiting for your confirmation',
 }
